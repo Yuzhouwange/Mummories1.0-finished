@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>好友列表 - Mummories</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 32px 16px; box-sizing: border-box; }
+  .friends-wrap { width: 100%; max-width: 540px; }
+  .back-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--text-muted); font-size: 13px; text-decoration: none; margin-bottom: 16px; transition: color 0.2s;
+  }
+  .back-link:hover { color: #fff; }
+  .friends-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+  .friends-list { display: flex; flex-direction: column; gap: 8px; }
+  .friend-item {
+    display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+    border-radius: 12px; background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    cursor: pointer; transition: all 0.2s; text-decoration: none; color: inherit;
+  }
+  .friend-item:hover { background: rgba(255,255,255,0.08); transform: translateY(-1px); }
+  .friend-avatar {
+    width: 42px; height: 42px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+    background: rgba(var(--accent-rgb), 0.08);
+    border: 2px solid rgba(var(--accent-rgb), 0.25);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 700; color: rgba(255,255,255,0.5);
+  }
+  .friend-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+  .friend-info { flex: 1; min-width: 0; }
+  .friend-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .friend-status { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .friend-status .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+  .dot-online { background: #4ade80; }
+  .dot-offline { background: #666; }
+  .friend-arrow { color: var(--text-muted); opacity: 0.4; flex-shrink: 0; }
+  .empty-msg { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 14px; }
+  .loading-spinner {
+    width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.1);
+    border-top-color: rgba(255,255,255,0.5); border-radius: 50%;
+    animation: spin 0.8s linear infinite; margin: 40px auto;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+<script src="page-bg.js"></script>
+</head>
+<body>
+<div class="friends-wrap">
+  <a class="back-link" href="/">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+    返回首页
+  </a>
+  <div class="glass-card">
+    <div class="friends-title">好友列表</div>
+    <div id="friendsList"><div class="loading-spinner"></div></div>
+  </div>
+</div>
+<script>
+(function () {
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  fetch('/api/v1/friends', { credentials: 'include' })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+      var container = document.getElementById('friendsList');
+      if (!res.success) {
+        container.innerHTML = '<div class="empty-msg">' + esc(res.error || '请先登录后查看好友列表') + '</div>';
+        return;
+      }
+      var list = res.data;
+      if (!list || !list.length) {
+        container.innerHTML = '<div class="empty-msg">暂无好友，去聊天室添加好友吧~</div>';
+        return;
+      }
+      container.innerHTML = '<div class="friends-list">' + list.map(function (f) {
+        var initials = esc((f.username || '?').charAt(0).toUpperCase());
+        var avatarHtml = '';
+        if (f.avatar) {
+          var src = f.avatar.indexOf('/') >= 0 || f.avatar.indexOf('http') === 0 ? f.avatar : '/avatars/' + f.avatar;
+          avatarHtml = '<img src="' + esc(src) + '" alt="" onerror="this.style.display=\'none\';this.parentNode.textContent=\'' + initials + '\'">';
+        } else {
+          avatarHtml = initials;
+        }
+        var statusText = f.status === 'online' ? '在线' : '离线';
+        var dotClass = f.status === 'online' ? 'dot-online' : 'dot-offline';
+        return '<a class="friend-item" href="profile.html?chatid=' + f.chat_id + '">'
+          + '<div class="friend-avatar">' + avatarHtml + '</div>'
+          + '<div class="friend-info">'
+          + '<div class="friend-name">' + esc(f.username) + '</div>'
+          + '<div class="friend-status"><span class="dot ' + dotClass + '"></span>' + statusText + '</div>'
+          + '</div>'
+          + '<svg class="friend-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>'
+          + '</a>';
+      }).join('') + '</div>';
+    })
+    .catch(function () {
+      document.getElementById('friendsList').innerHTML = '<div class="empty-msg">加载失败，请稍后重试</div>';
+    });
+}());
+</script>
+</body>
+</html>

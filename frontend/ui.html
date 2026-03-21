@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI组件库 - Mummories</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { overflow: auto; }
+        .page-wrap { position: relative; z-index: 2; max-width: 1200px; margin: 0 auto; padding: 20px 24px; min-height: 100vh; }
+
+        /* 顶栏 */
+        .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+        .page-header h1 { font-size: 22px; font-weight: 700; flex: 1; }
+        .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); text-decoration: none; font-size: 13px; padding: 6px 14px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); transition: all 0.25s; }
+        .back-link:hover { color: #fff; background: rgba(255,255,255,0.12); }
+
+        /* 工具栏 */
+        .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .search-box { flex: 1; min-width: 200px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--card-bg); color: var(--text); font-size: 14px; outline: none; transition: border-color 0.2s; }
+        .search-box:focus { border-color: rgba(255,255,255,0.25); }
+        .search-box::placeholder { color: var(--text-muted); }
+
+        .filter-group { display: flex; gap: 4px; }
+        .filter-btn { padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; border: 1px solid var(--card-border); background: var(--card-bg); color: var(--text-muted); transition: all 0.2s; }
+        .filter-btn:hover { background: var(--card-bg-hover); color: #fff; }
+        .filter-btn.active { background: rgba(255,255,255,0.12); color: #fff; border-color: rgba(255,255,255,0.2); }
+
+        /* 媒体网格 */
+        .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+        .media-card { border-radius: 14px; background: var(--card-bg); border: 1px solid var(--card-border); overflow: hidden; transition: all 0.25s; }
+        .media-card:hover { background: var(--card-bg-hover); border-color: var(--card-border-hover); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+
+        /* 媒体预览 */
+        .media-preview { position: relative; width: 100%; aspect-ratio: 16/10; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .media-preview img { width: 100%; height: 100%; object-fit: cover; }
+        .media-preview video { width: 100%; height: 100%; object-fit: cover; }
+        .media-preview audio { width: 90%; }
+        .media-preview .text-preview { padding: 16px; font-size: 13px; color: var(--text-muted); line-height: 1.6; max-height: 100%; overflow: hidden; white-space: pre-wrap; word-break: break-word; }
+        .media-preview .link-preview { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--text-muted); }
+        .media-preview .link-preview svg { width: 32px; height: 32px; opacity: 0.5; }
+        .media-preview .link-preview span { font-size: 12px; max-width: 80%; text-align: center; word-break: break-all; }
+        .media-preview .file-preview { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--text-muted); }
+        .media-preview .file-preview svg { width: 36px; height: 36px; opacity: 0.4; }
+        .media-preview .file-preview .file-name { font-size: 12px; max-width: 80%; text-align: center; word-break: break-all; }
+        .media-preview .file-preview .file-size { font-size: 11px; opacity: 0.5; }
+        .type-badge { position: absolute; top: 8px; left: 8px; padding: 2px 8px; border-radius: 4px; font-size: 10px; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); color: rgba(255,255,255,0.8); text-transform: uppercase; }
+
+        /* 媒体信息 */
+        .media-info { padding: 14px 16px; }
+        .media-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .media-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 8px; }
+        .media-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+        .media-tag { font-size: 10px; padding: 2px 8px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--text-muted); }
+        .media-actions { display: flex; gap: 6px; }
+        .act-btn { padding: 4px 10px; border-radius: 5px; font-size: 11px; cursor: pointer; border: 1px solid var(--card-border); background: var(--card-bg); color: var(--text-muted); transition: all 0.2s; }
+        .act-btn:hover { color: #fff; background: var(--card-bg-hover); }
+        .act-btn.danger:hover { color: #ff6b6b; border-color: rgba(255,107,107,0.3); }
+        .act-btn.primary { background: rgba(255,255,255,0.1); color: #fff; }
+
+        /* 空状态 */
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+        .empty-state svg { width: 48px; height: 48px; opacity: 0.3; margin-bottom: 12px; }
+        .empty-state p { font-size: 14px; }
+
+        /* 弹窗 */
+        .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 100; display: none; align-items: center; justify-content: center; }
+        .modal-mask.show { display: flex; }
+        .modal { width: 560px; max-width: 92vw; max-height: 85vh; overflow-y: auto; border-radius: 16px; padding: 28px; background: rgba(30,35,42,0.95); border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(20px); box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
+        .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 20px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 5px; }
+        .form-input { width: 100%; padding: 8px 12px; border-radius: 8px; box-sizing: border-box; border: 1px solid var(--card-border); background: var(--card-bg); color: var(--text); font-size: 14px; outline: none; transition: border-color 0.2s; }
+        .form-input:focus { border-color: rgba(255,255,255,0.25); }
+        .form-input::placeholder { color: var(--text-muted); }
+        textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; }
+        select.form-input { appearance: auto; }
+        .form-row { display: flex; gap: 12px; }
+        .form-row .form-group { flex: 1; }
+        .form-actions { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
+
+        /* 文件上传区 */
+        .upload-zone { border: 2px dashed var(--card-border); border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; transition: all 0.2s; color: var(--text-muted); }
+        .upload-zone:hover { border-color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.03); }
+        .upload-zone.dragover { border-color: rgba(255,255,255,0.35); background: rgba(255,255,255,0.06); }
+        .upload-zone svg { width: 32px; height: 32px; opacity: 0.4; margin-bottom: 8px; }
+        .upload-zone .hint { font-size: 12px; margin-top: 6px; opacity: 0.5; }
+        .upload-zone .file-selected { color: #6bcb77; font-size: 13px; }
+
+        .msg-ok { color: #6bcb77; font-size: 12px; }
+        .msg-err { color: #ff6b6b; font-size: 12px; }
+
+        /* 预览弹窗 */
+        .preview-modal .modal { width: 800px; max-width: 95vw; }
+        .preview-content { margin-top: 16px; }
+        .preview-content img { max-width: 100%; border-radius: 8px; }
+        .preview-content video { max-width: 100%; border-radius: 8px; }
+        .preview-content audio { width: 100%; }
+        .preview-content .text-full { background: rgba(0,0,0,0.3); padding: 16px; border-radius: 8px; white-space: pre-wrap; word-break: break-word; font-size: 14px; line-height: 1.7; max-height: 60vh; overflow-y: auto; }
+        .preview-meta { margin-top: 12px; font-size: 12px; color: var(--text-muted); display: flex; gap: 16px; flex-wrap: wrap; }
+
+        @media (max-width: 600px) {
+            .media-grid { grid-template-columns: 1fr; }
+            .page-wrap { padding: 14px; }
+            .form-row { flex-direction: column; gap: 0; }
+        }
+    </style>
+</head>
+<body>
+    <!-- 背景 -->
+    <div class="bg" id="bgLayer">
+        <img class="bg-image" id="bgImage" alt="" style="display:none">
+        <div class="pattern-bg">
+            <svg class="cube-svg" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
+                <defs><pattern id="cube" x="0" y="0" width="60" height="52" patternUnits="userSpaceOnUse"><path d="M30 0 L60 15 L60 41 L30 52 L0 41 L0 15 Z" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/><path d="M30 26 L60 15 M30 26 L0 15 M30 26 L30 52" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="0.5"/></pattern></defs>
+                <rect width="100%" height="100%" fill="url(#cube)"/>
+            </svg>
+        </div>
+    </div>
+    <div class="bg-blur" id="bgBlurLayer"></div>
+
+    <div class="page-wrap">
+        <!-- 顶栏 -->
+        <div class="page-header">
+            <a class="back-link" href="index.html">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+                返回主页
+            </a>
+            <h1>UI 组件库</h1>
+            <button class="glass-btn btn-primary btn-sm admin-action" id="addBtn" style="display:none">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                添加内容
+            </button>
+        </div>
+
+        <!-- 工具栏 -->
+        <div class="toolbar">
+            <input class="search-box" id="searchBox" placeholder="搜索组件..." autocomplete="off">
+            <div class="filter-group">
+                <button class="filter-btn active" data-type="all">全部</button>
+                <button class="filter-btn" data-type="image">图片</button>
+                <button class="filter-btn" data-type="video">视频</button>
+                <button class="filter-btn" data-type="audio">音频</button>
+                <button class="filter-btn" data-type="text">文字</button>
+                <button class="filter-btn" data-type="file">文件</button>
+                <button class="filter-btn" data-type="link">链接</button>
+            </div>
+        </div>
+
+        <!-- 内容网格 -->
+        <div class="media-grid" id="mediaGrid"></div>
+        <div class="empty-state" id="emptyState" style="display:none">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            <p>还没有内容，点击"添加内容"开始创建</p>
+        </div>
+    </div>
+
+    <!-- 添加/编辑弹窗 -->
+    <div class="modal-mask" id="editModal">
+        <div class="modal">
+            <div class="modal-title" id="modalTitle">添加内容</div>
+            <input type="hidden" id="editId">
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>内容类型</label>
+                    <select class="form-input" id="fType">
+                        <option value="image">图片</option>
+                        <option value="video">视频</option>
+                        <option value="audio">音频</option>
+                        <option value="text">文字</option>
+                        <option value="file">文件</option>
+                        <option value="link">链接</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>标题</label>
+                    <input class="form-input" id="fTitle" placeholder="组件名称" maxlength="200">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>描述</label>
+                <textarea class="form-input" id="fDesc" rows="2" placeholder="简短描述（可选）"></textarea>
+            </div>
+
+            <!-- 文件上传区 (图片/视频/音频/文件) -->
+            <div class="form-group" id="fileUploadGroup">
+                <label>上传文件</label>
+                <div class="upload-zone" id="uploadZone">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <div id="uploadHint">点击或拖拽文件到此处</div>
+                    <div class="hint">支持图片、视频、音频、文档等（最大 50MB）</div>
+                </div>
+                <input type="file" id="fileInput" style="display:none">
+            </div>
+
+            <!-- 链接输入 (link类型) -->
+            <div class="form-group" id="linkGroup" style="display:none">
+                <label>链接地址</label>
+                <input class="form-input" id="fUrl" placeholder="https://..." maxlength="1000">
+            </div>
+
+            <!-- 文字内容 (text类型) -->
+            <div class="form-group" id="textGroup" style="display:none">
+                <label>文字内容</label>
+                <textarea class="form-input" id="fContent" rows="8" placeholder="输入文字内容..." style="min-height:150px;font-family:monospace;"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>标签（逗号分隔）</label>
+                <input class="form-input" id="fTags" placeholder="按钮, 卡片, 动画">
+            </div>
+
+            <div class="form-actions">
+                <button class="glass-btn btn-primary" id="saveBtn">保存</button>
+                <button class="glass-btn" id="cancelBtn">取消</button>
+                <span id="formMsg"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 预览弹窗 -->
+    <div class="modal-mask preview-modal" id="previewModal">
+        <div class="modal">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+                <div class="modal-title" id="previewTitle" style="margin-bottom:0"></div>
+                <button class="glass-btn btn-sm" id="previewClose">&times; 关闭</button>
+            </div>
+            <div class="preview-content" id="previewContent"></div>
+            <div class="preview-meta" id="previewMeta"></div>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        'use strict';
+
+        // ===== 背景恢复 =====
+        var bgImage = document.getElementById('bgImage');
+        var patternBg = document.querySelector('.pattern-bg');
+        var bgBlurEl = document.getElementById('bgBlurLayer');
+        var BG_DB_NAME = 'homepageBgDB', BG_STORE = 'bgStore', BG_KEY = 'currentBg';
+        function openBgDB(cb) { var r = indexedDB.open(BG_DB_NAME,1); r.onupgradeneeded=function(e){e.target.result.createObjectStore(BG_STORE);}; r.onsuccess=function(e){cb(e.target.result);}; r.onerror=function(){cb(null);}; }
+        function showBgBlob(b) { var u=URL.createObjectURL(b); bgImage.src=u; bgImage.style.display=''; if(patternBg)patternBg.style.display='none'; }
+        openBgDB(function(db){if(!db)return;var r=db.transaction(BG_STORE,'readonly').objectStore(BG_STORE).get(BG_KEY);r.onsuccess=function(){if(r.result)showBgBlob(r.result);};});
+        var sB='4',sO='25';try{sB=localStorage.getItem('hp_bgBlur')||'4';sO=localStorage.getItem('hp_bgOpacity')||'25';}catch(e){}
+        if(bgBlurEl){bgBlurEl.style.backdropFilter='blur('+sB+'px)';bgBlurEl.style.webkitBackdropFilter='blur('+sB+'px)';bgBlurEl.style.background='rgba(24,28,33,'+(sO/100)+')';}
+
+        // ===== 工具 =====
+        function api(path, opts) {
+            opts = opts || {};
+            opts.credentials = 'include';
+            return fetch('/api/v1/' + path, opts).then(function (r) { return r.json(); });
+        }
+        function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+        var isAdmin = false;
+        var mediaItems = [];
+        var currentFilter = 'all';
+        var searchQuery = '';
+
+        // 检查管理员
+        api('auth').then(function (r) {
+            if (r.data && r.data.logged_in) {
+                isAdmin = true;
+                document.querySelectorAll('.admin-action').forEach(function (el) { el.style.display = ''; });
+            }
+        });
+
+        // ===== 加载数据 =====
+        function loadMedia() {
+            api('media?category=ui').then(function (r) {
+                if (!r.success) return;
+                mediaItems = r.data || [];
+                renderGrid();
+            });
+        }
+        loadMedia();
+
+        // ===== 渲染网格 =====
+        function renderGrid() {
+            var grid = document.getElementById('mediaGrid');
+            var empty = document.getElementById('emptyState');
+            var filtered = mediaItems.filter(function (m) {
+                if (currentFilter !== 'all' && m.type !== currentFilter) return false;
+                if (searchQuery) {
+                    var q = searchQuery.toLowerCase();
+                    return (m.title || '').toLowerCase().indexOf(q) !== -1 ||
+                           (m.description || '').toLowerCase().indexOf(q) !== -1 ||
+                           (m.tags || []).join(',').toLowerCase().indexOf(q) !== -1;
+                }
+                return true;
+            });
+
+            if (!filtered.length) {
+                grid.innerHTML = '';
+                empty.style.display = '';
+                return;
+            }
+            empty.style.display = 'none';
+
+            grid.innerHTML = filtered.map(function (m) {
+                var preview = getPreviewHtml(m);
+                var tagsHtml = (m.tags || []).map(function (t) { return '<span class="media-tag">'+esc(t)+'</span>'; }).join('');
+                var actions = '<button class="act-btn primary" onclick="previewItem('+m.id+')">查看</button>';
+                if (m.type === 'link' && m.url) {
+                    actions += ' <a class="act-btn" href="'+esc(m.url)+'" target="_blank" rel="noopener">打开链接</a>';
+                }
+                if (m.type === 'file' && m.file_path) {
+                    actions += ' <a class="act-btn" href="/api/v1/media-file/'+m.id+'" target="_blank">下载</a>';
+                }
+                if (isAdmin) {
+                    actions += ' <button class="act-btn" onclick="editItem('+m.id+')">编辑</button>';
+                    actions += ' <button class="act-btn danger" onclick="deleteItem('+m.id+')">删除</button>';
+                }
+                return '<div class="media-card">' +
+                    '<div class="media-preview">'+preview+'<span class="type-badge">'+esc(m.type)+'</span></div>' +
+                    '<div class="media-info">' +
+                        '<div class="media-title">'+esc(m.title)+'</div>' +
+                        (m.description ? '<div class="media-desc">'+esc(m.description)+'</div>' : '') +
+                        (tagsHtml ? '<div class="media-tags">'+tagsHtml+'</div>' : '') +
+                        '<div class="media-actions">'+actions+'</div>' +
+                    '</div></div>';
+            }).join('');
+        }
+
+        function getPreviewHtml(m) {
+            var fileSrc = m.file_path ? '/api/v1/media-file/' + m.id : '';
+            switch (m.type) {
+                case 'image':
+                    return fileSrc ? '<img src="'+fileSrc+'" alt="" loading="lazy">' :
+                           (m.url ? '<img src="'+esc(m.url)+'" alt="" loading="lazy">' : '<div class="file-preview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></div>');
+                case 'video':
+                    return fileSrc ? '<video src="'+fileSrc+'" preload="metadata"></video>' :
+                           (m.url ? '<video src="'+esc(m.url)+'" preload="metadata"></video>' : '<div class="file-preview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>');
+                case 'audio':
+                    return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><audio controls src="'+(fileSrc||esc(m.url||''))+'" style="width:90%"></audio></div>';
+                case 'text':
+                    return '<div class="text-preview">'+ esc((m.content || '').substring(0, 200)) + (((m.content||'').length > 200) ? '...' : '') +'</div>';
+                case 'link':
+                    return '<div class="link-preview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><span>'+esc(m.url || '未设置链接')+'</span></div>';
+                case 'file':
+                    var size = m.file_size ? (m.file_size > 1048576 ? (m.file_size / 1048576).toFixed(1) + ' MB' : (m.file_size / 1024).toFixed(0) + ' KB') : '';
+                    return '<div class="file-preview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><div class="file-name">'+esc(m.file_name || '未知文件')+'</div><div class="file-size">'+size+'</div></div>';
+                default:
+                    return '';
+            }
+        }
+
+        function formatSize(bytes) {
+            if (!bytes) return '';
+            return bytes > 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : (bytes / 1024).toFixed(0) + ' KB';
+        }
+
+        // ===== 搜索 & 过滤 =====
+        document.getElementById('searchBox').addEventListener('input', function () {
+            searchQuery = this.value.trim();
+            renderGrid();
+        });
+        document.querySelector('.filter-group').addEventListener('click', function (e) {
+            var btn = e.target.closest('.filter-btn');
+            if (!btn) return;
+            document.querySelectorAll('.filter-btn').forEach(function (b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            currentFilter = btn.dataset.type;
+            renderGrid();
+        });
+
+        // ===== 添加/编辑弹窗 =====
+        var editModal = document.getElementById('editModal');
+        var selectedFile = null;
+
+        document.getElementById('addBtn').addEventListener('click', function () {
+            openEditForm(null);
+        });
+
+        function openEditForm(item) {
+            document.getElementById('editId').value = item ? item.id : '';
+            document.getElementById('modalTitle').textContent = item ? '编辑内容' : '添加内容';
+            document.getElementById('fType').value = item ? item.type : 'image';
+            document.getElementById('fType').disabled = !!item;
+            document.getElementById('fTitle').value = item ? item.title : '';
+            document.getElementById('fDesc').value = item ? (item.description || '') : '';
+            document.getElementById('fUrl').value = item ? (item.url || '') : '';
+            document.getElementById('fContent').value = item ? (item.content || '') : '';
+            document.getElementById('fTags').value = item ? (item.tags || []).join(', ') : '';
+            selectedFile = null;
+            document.getElementById('uploadHint').innerHTML = '点击或拖拽文件到此处';
+            document.getElementById('formMsg').textContent = '';
+            toggleFieldsByType(item ? item.type : 'image');
+            editModal.classList.add('show');
+        }
+
+        document.getElementById('cancelBtn').addEventListener('click', function () { editModal.classList.remove('show'); });
+        editModal.addEventListener('click', function (e) { if (e.target === editModal) editModal.classList.remove('show'); });
+
+        document.getElementById('fType').addEventListener('change', function () { toggleFieldsByType(this.value); });
+
+        function toggleFieldsByType(type) {
+            var showFile = ['image', 'video', 'audio', 'file'].indexOf(type) !== -1;
+            var showLink = type === 'link' || type === 'image' || type === 'video' || type === 'audio';
+            var showText = type === 'text';
+            document.getElementById('fileUploadGroup').style.display = showFile ? '' : 'none';
+            document.getElementById('linkGroup').style.display = showLink ? '' : 'none';
+            document.getElementById('textGroup').style.display = showText ? '' : 'none';
+            // 更新链接标签
+            if (type === 'link') {
+                document.querySelector('#linkGroup label').textContent = '链接地址';
+            } else {
+                document.querySelector('#linkGroup label').textContent = '外部URL（可替代文件上传）';
+            }
+        }
+
+        // 文件选择 & 拖拽
+        var uploadZone = document.getElementById('uploadZone');
+        var fileInput = document.getElementById('fileInput');
+
+        uploadZone.addEventListener('click', function () { fileInput.click(); });
+        uploadZone.addEventListener('dragover', function (e) { e.preventDefault(); uploadZone.classList.add('dragover'); });
+        uploadZone.addEventListener('dragleave', function () { uploadZone.classList.remove('dragover'); });
+        uploadZone.addEventListener('drop', function (e) {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                selectedFile = e.dataTransfer.files[0];
+                document.getElementById('uploadHint').innerHTML = '<span class="file-selected">' + esc(selectedFile.name) + ' (' + formatSize(selectedFile.size) + ')</span>';
+            }
+        });
+        fileInput.addEventListener('change', function () {
+            if (this.files.length) {
+                selectedFile = this.files[0];
+                document.getElementById('uploadHint').innerHTML = '<span class="file-selected">' + esc(selectedFile.name) + ' (' + formatSize(selectedFile.size) + ')</span>';
+            }
+        });
+
+        // 保存
+        document.getElementById('saveBtn').addEventListener('click', function () {
+            var id = document.getElementById('editId').value;
+            var type = document.getElementById('fType').value;
+            var title = document.getElementById('fTitle').value.trim();
+            var msg = document.getElementById('formMsg');
+
+            if (!title) { msg.className = 'msg-err'; msg.textContent = '请填写标题'; return; }
+
+            if (id) {
+                // 编辑模式 - PUT JSON
+                var data = {
+                    title: title,
+                    description: document.getElementById('fDesc').value.trim(),
+                    url: document.getElementById('fUrl').value.trim(),
+                    content: document.getElementById('fContent').value,
+                    tags: document.getElementById('fTags').value.trim()
+                };
+                api('media/' + id, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                }).then(function (r) {
+                    if (r.success) { editModal.classList.remove('show'); loadMedia(); }
+                    else { msg.className = 'msg-err'; msg.textContent = r.error || '失败'; }
+                });
+            } else {
+                // 新建模式 - FormData
+                var fd = new FormData();
+                fd.append('category', 'ui');
+                fd.append('type', type);
+                fd.append('title', title);
+                fd.append('description', document.getElementById('fDesc').value.trim());
+                fd.append('url', document.getElementById('fUrl').value.trim());
+                fd.append('content', document.getElementById('fContent').value);
+                fd.append('tags', document.getElementById('fTags').value.trim());
+                if (selectedFile) fd.append('file', selectedFile);
+
+                msg.className = ''; msg.textContent = '上传中...';
+                fetch('/api/v1/media', { method: 'POST', body: fd, credentials: 'include' })
+                    .then(function (r) { return r.json(); })
+                    .then(function (r) {
+                        if (r.success) { editModal.classList.remove('show'); loadMedia(); }
+                        else { msg.className = 'msg-err'; msg.textContent = r.error || '失败'; }
+                    });
+            }
+        });
+
+        // ===== 预览 =====
+        window.previewItem = function (id) {
+            var m = mediaItems.find(function (x) { return x.id === id; });
+            if (!m) return;
+            document.getElementById('previewTitle').textContent = m.title;
+            var fileSrc = m.file_path ? '/api/v1/media-file/' + m.id : '';
+            var html = '';
+            switch (m.type) {
+                case 'image':
+                    var src = fileSrc || m.url || '';
+                    html = src ? '<img src="'+esc(src)+'">' : '<p style="color:var(--text-muted)">无图片</p>';
+                    break;
+                case 'video':
+                    var src = fileSrc || m.url || '';
+                    html = src ? '<video controls src="'+esc(src)+'" style="width:100%"></video>' : '<p>无视频</p>';
+                    break;
+                case 'audio':
+                    var src = fileSrc || m.url || '';
+                    html = src ? '<audio controls src="'+esc(src)+'" style="width:100%"></audio>' : '<p>无音频</p>';
+                    break;
+                case 'text':
+                    html = '<div class="text-full">' + esc(m.content || '（空）') + '</div>';
+                    break;
+                case 'link':
+                    html = '<p>链接: <a href="'+esc(m.url || '')+'" target="_blank" rel="noopener" style="color:#6bcb77;word-break:break-all">'+esc(m.url || '')+'</a></p>';
+                    break;
+                case 'file':
+                    html = '<p>文件: <strong>'+esc(m.file_name || '未知')+'</strong> ('+formatSize(m.file_size)+')</p>' +
+                           (fileSrc ? '<a class="glass-btn btn-primary btn-sm" href="'+fileSrc+'" target="_blank" style="margin-top:8px;display:inline-flex">下载文件</a>' : '');
+                    break;
+            }
+            document.getElementById('previewContent').innerHTML = html;
+            document.getElementById('previewMeta').innerHTML =
+                '<span>类型: '+esc(m.type)+'</span>' +
+                (m.tags && m.tags.length ? '<span>标签: '+m.tags.map(function(t){return esc(t);}).join(', ')+'</span>' : '') +
+                '<span>创建: '+esc(m.created_at || '')+'</span>';
+            document.getElementById('previewModal').classList.add('show');
+        };
+
+        document.getElementById('previewClose').addEventListener('click', function () { document.getElementById('previewModal').classList.remove('show'); });
+        document.getElementById('previewModal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('show'); });
+
+        // ===== 编辑/删除 =====
+        window.editItem = function (id) {
+            var m = mediaItems.find(function (x) { return x.id === id; });
+            if (m) openEditForm(m);
+        };
+
+        window.deleteItem = function (id) {
+            if (!confirm('确认删除？删除后无法恢复。')) return;
+            api('media/' + id, { method: 'DELETE' }).then(function (r) {
+                if (r.success) loadMedia();
+                else alert(r.error || '删除失败');
+            });
+        };
+
+    })();
+    </script>
+</body>
+</html>

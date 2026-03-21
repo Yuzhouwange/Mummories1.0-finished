@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注册 / 登录 - Mummories</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { overflow: auto; }
+        .auth-wrapper { position: relative; z-index: 2; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+        .auth-card { max-width: 420px; width: 100%; padding: 36px; }
+        .auth-card h2 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+        .auth-card .subtitle { color: var(--text-muted); font-size: 13px; margin-bottom: 24px; }
+        .auth-tabs { display: flex; gap: 4px; margin-bottom: 24px; }
+        .auth-tab { flex: 1; text-align: center; padding: 10px; border-radius: 8px; font-size: 14px; cursor: pointer; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); color: var(--text-muted); transition: all 0.2s; }
+        .auth-tab:hover { background: rgba(255,255,255,0.08); }
+        .auth-tab.active { background: rgba(255,255,255,0.12); color: #fff; border-color: rgba(255,255,255,0.18); }
+        .auth-form { display: none; }
+        .auth-form.active { display: block; }
+        .field { margin-bottom: 16px; }
+        .field label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 5px; }
+        .field .glass-input { width: 100%; box-sizing: border-box; }
+        .auth-btn { width: 100%; margin-top: 8px; padding: 12px; font-size: 14px; }
+        .auth-msg { margin-top: 12px; font-size: 13px; text-align: center; min-height: 18px; }
+        .auth-msg.ok { color: #6bcb77; }
+        .auth-msg.err { color: #ff6b6b; }
+        .auth-footer { text-align: center; margin-top: 20px; font-size: 12px; color: var(--text-muted); }
+        .auth-footer a { color: var(--text-muted); text-decoration: underline; }
+        .auth-footer a:hover { color: #fff; }
+        /* 协议相关 */
+        .agreement-notice { margin-bottom:12px; padding:12px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid rgba(255,255,255,0.08); font-size:12px; color:var(--text-muted); text-align:center; line-height:1.8; }
+        .agreement-notice a { color:#6bcb77; text-decoration:none; cursor:pointer; font-weight:600; }
+        .agreement-notice a:hover { text-decoration:underline; }
+        .agreement-notice .agr-status { color:#ff6b6b; font-weight:600; margin-left:4px; }
+        .agreement-notice.done .agr-status { color:#6bcb77; }
+        .auth-btn:disabled { opacity:0.4; cursor:not-allowed; }
+        .agr-modal { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; }
+        .agr-modal.show { display:flex; }
+        .agr-box { background:#1e2028; border:1px solid rgba(255,255,255,0.12); border-radius:12px; width:90%; max-width:720px; max-height:80vh; display:flex; flex-direction:column; animation:agrIn .25s ease; }
+        @keyframes agrIn { from{opacity:0;transform:translateY(-12px) scale(.97)} to{opacity:1;transform:none} }
+        .agr-head { display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.08); }
+        .agr-head h3 { margin:0; font-size:17px; color:#fff; }
+        .agr-close { background:none; border:none; font-size:24px; color:#999; cursor:pointer; }
+        .agr-progress { padding:10px 20px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:12px; color:var(--text-muted); display:flex; align-items:center; gap:8px; }
+        .agr-bar { flex:1; height:3px; background:rgba(255,255,255,0.08); border-radius:2px; overflow:hidden; }
+        .agr-bar-fill { height:100%; width:0; background:#6bcb77; transition:width .3s; }
+        .agr-timer { font-size:11px; color:#ff6b6b; font-weight:600; }
+        .agr-timer.done { color:#6bcb77; }
+        .agr-body { padding:20px; overflow-y:auto; flex:1; line-height:1.9; color:rgba(255,255,255,0.7); font-size:13px; }
+        .agr-body h1,.agr-body h2,.agr-body h3 { color:#fff; margin:20px 0 10px; }
+        .agr-body h1{font-size:18px} .agr-body h2{font-size:16px; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:6px;} .agr-body h3{font-size:14px}
+        .agr-body p { margin-bottom:12px; }
+        .agr-body ul { margin:8px 0; padding-left:18px; }
+        .agr-body li { margin:4px 0; }
+        .agr-foot { padding:12px 20px; border-top:1px solid rgba(255,255,255,0.08); display:flex; justify-content:flex-end; gap:10px; }
+        .agr-foot .glass-btn { font-size:13px; padding:8px 20px; }
+    </style>
+</head>
+<body>
+    <div class="bg" id="bgLayer">
+        <img class="bg-image" id="bgImage" alt="" style="display:none">
+        <div class="pattern-bg">
+            <svg class="cube-svg" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
+                <defs><pattern id="cube" x="0" y="0" width="60" height="52" patternUnits="userSpaceOnUse"><path d="M30 0 L60 15 L60 41 L30 52 L0 41 L0 15 Z" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/><path d="M30 26 L60 15 M30 26 L0 15 M30 26 L30 52" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="0.5"/></pattern></defs>
+                <rect width="100%" height="100%" fill="url(#cube)"/>
+            </svg>
+        </div>
+    </div>
+    <div class="bg-blur" id="bgBlurLayer"></div>
+
+    <div class="auth-wrapper">
+        <div class="auth-card content-card glass-card">
+            <h2>Mummories</h2>
+            <div class="subtitle">注册博客账户，畅享聊天室与个人主页</div>
+
+            <div class="auth-tabs">
+                <div class="auth-tab active" data-form="login">登录</div>
+                <div class="auth-tab" data-form="register">注册</div>
+            </div>
+
+            <!-- 登录表单 -->
+            <form class="auth-form active" id="loginForm">
+                <div class="field">
+                    <label>用户名 / 邮箱</label>
+                    <input class="glass-input" type="text" id="loginId" required autocomplete="username">
+                </div>
+                <div class="field">
+                    <label>密码</label>
+                    <input class="glass-input" type="password" id="loginPwd" required autocomplete="current-password">
+                </div>
+                <button class="glass-btn btn-primary auth-btn" type="submit">登录</button>
+            </form>
+
+            <!-- 注册表单 -->
+            <form class="auth-form" id="registerForm">
+                <div class="field">
+                    <label>用户名（3-20 字符）</label>
+                    <input class="glass-input" type="text" id="regUser" required minlength="3" maxlength="20" autocomplete="username">
+                </div>
+                <div class="field">
+                    <label>邮箱</label>
+                    <input class="glass-input" type="email" id="regEmail" required autocomplete="email">
+                </div>
+                <div class="field">
+                    <label>密码（至少 6 位）</label>
+                    <input class="glass-input" type="password" id="regPwd" required minlength="6" autocomplete="new-password">
+                </div>
+                <div class="field">
+                    <label>确认密码</label>
+                    <input class="glass-input" type="password" id="regPwd2" required minlength="6" autocomplete="new-password">
+                </div>
+                <div class="agreement-notice" id="agrNotice">
+                    注册即表示同意 <a href="#" id="showTerms">《服务条款》</a> 和 <a href="#" id="showPrivacy">《隐私政策》</a>
+                    <span class="agr-status" id="agrStatus">（请先阅读协议）</span>
+                </div>
+                <button class="glass-btn btn-primary auth-btn" type="submit" id="regBtn" disabled>请先阅读协议</button>
+            </form>
+
+            <div class="auth-msg" id="authMsg"></div>
+
+            <div class="auth-footer">
+                <a href="index.html">← 返回主页</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 服务条款弹窗 -->
+    <div class="agr-modal" id="termsModal">
+        <div class="agr-box">
+            <div class="agr-head"><h3>服务条款</h3><button class="agr-close" onclick="closeAgr('terms')">&times;</button></div>
+            <div class="agr-progress"><span>阅读进度:</span><div class="agr-bar"><div class="agr-bar-fill" id="termsBarFill"></div></div><span id="termsPercent">0%</span><span class="agr-timer" id="termsTimer"></span></div>
+            <div class="agr-body" id="termsBody" onscroll="onAgrScroll(this,'terms')">加载中...</div>
+            <div class="agr-foot"><button class="glass-btn" onclick="closeAgr('terms')">关闭</button><button class="glass-btn btn-primary" id="termsAgreeBtn" disabled onclick="agreeAgr('terms')">同意</button></div>
+        </div>
+    </div>
+    <!-- 隐私政策弹窗 -->
+    <div class="agr-modal" id="privacyModal">
+        <div class="agr-box">
+            <div class="agr-head"><h3>隐私政策</h3><button class="agr-close" onclick="closeAgr('privacy')">&times;</button></div>
+            <div class="agr-progress"><span>阅读进度:</span><div class="agr-bar"><div class="agr-bar-fill" id="privacyBarFill"></div></div><span id="privacyPercent">0%</span><span class="agr-timer" id="privacyTimer"></span></div>
+            <div class="agr-body" id="privacyBody" onscroll="onAgrScroll(this,'privacy')">加载中...</div>
+            <div class="agr-foot"><button class="glass-btn" onclick="closeAgr('privacy')">关闭</button><button class="glass-btn btn-primary" id="privacyAgreeBtn" disabled onclick="agreeAgr('privacy')">同意</button></div>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // 背景恢复
+        var bgImage = document.getElementById('bgImage');
+        var patternBg = document.querySelector('.pattern-bg');
+        var bgBlurEl = document.getElementById('bgBlurLayer');
+        var BG_DB_NAME = 'homepageBgDB', BG_STORE = 'bgStore', BG_KEY = 'currentBg';
+        function openBgDB(cb) { var r = indexedDB.open(BG_DB_NAME,1); r.onupgradeneeded=function(e){e.target.result.createObjectStore(BG_STORE);}; r.onsuccess=function(e){cb(e.target.result);}; r.onerror=function(){cb(null);}; }
+        function showBlob(b) { var u=URL.createObjectURL(b); bgImage.src=u; bgImage.style.display=''; if(patternBg)patternBg.style.display='none'; }
+        openBgDB(function(db){if(!db)return;var r=db.transaction(BG_STORE,'readonly').objectStore(BG_STORE).get(BG_KEY);r.onsuccess=function(){if(r.result)showBlob(r.result);};});
+        var sB='4',sO='25';try{sB=localStorage.getItem('hp_bgBlur')||'4';sO=localStorage.getItem('hp_bgOpacity')||'25';}catch(e){}
+        if(bgBlurEl){bgBlurEl.style.backdropFilter='blur('+sB+'px)';bgBlurEl.style.webkitBackdropFilter='blur('+sB+'px)';bgBlurEl.style.background='rgba(24,28,33,'+(sO/100)+')';}
+
+        // 检查是否已登录，已登录则跳转主页
+        fetch('/api/v1/blog/status', { credentials: 'include' })
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+                if (res.data && res.data.logged_in) {
+                    var from = new URLSearchParams(location.search).get('from');
+                    location.href = from || 'index.html';
+                }
+            });
+
+        // Tab 切换
+        var tabs = document.querySelectorAll('.auth-tab');
+        var forms = document.querySelectorAll('.auth-form');
+        tabs.forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                tabs.forEach(function(t) { t.classList.remove('active'); });
+                forms.forEach(function(f) { f.classList.remove('active'); });
+                tab.classList.add('active');
+                var target = tab.dataset.form;
+                document.getElementById(target + 'Form').classList.add('active');
+                document.getElementById('authMsg').textContent = '';
+            });
+        });
+
+        var msgEl = document.getElementById('authMsg');
+        function showMsg(text, ok) {
+            msgEl.textContent = text;
+            msgEl.className = 'auth-msg ' + (ok ? 'ok' : 'err');
+        }
+
+        function api(path, data) {
+            return fetch('/api/v1/blog/' + path, {
+                method: 'POST', credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            }).then(function(r) { return r.json(); });
+        }
+
+        // 登录
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            var login = document.getElementById('loginId').value.trim();
+            var password = document.getElementById('loginPwd').value;
+            if (!login || !password) return;
+            api('login', { login: login, password: password }).then(function(res) {
+                if (res.success) {
+                    showMsg('登录成功，正在跳转...', true);
+                    setTimeout(function() {
+                        var from = new URLSearchParams(location.search).get('from');
+                        location.href = from || 'index.html';
+                    }, 600);
+                } else {
+                    showMsg(res.error || '登录失败', false);
+                }
+            }).catch(function() { showMsg('网络错误', false); });
+        });
+
+        // 注册
+        document.getElementById('registerForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            var username = document.getElementById('regUser').value.trim();
+            var email = document.getElementById('regEmail').value.trim();
+            var password = document.getElementById('regPwd').value;
+            var password2 = document.getElementById('regPwd2').value;
+            if (password !== password2) { showMsg('两次密码不一致', false); return; }
+            api('register', { username: username, email: email, password: password }).then(function(res) {
+                if (res.success) {
+                    showMsg('注册成功，正在跳转...', true);
+                    setTimeout(function() {
+                        var from = new URLSearchParams(location.search).get('from');
+                        location.href = from || 'index.html';
+                    }, 600);
+                } else {
+                    showMsg(res.error || '注册失败', false);
+                }
+            }).catch(function() { showMsg('网络错误', false); });
+        });
+
+        // ===== 协议系统 =====
+        var termsAgreed = false, privacyAgreed = false;
+        var termsStartTime = null, privacyStartTime = null;
+        var termsInterval = null, privacyInterval = null;
+
+        function renderMd(text) {
+            return text
+                .replace(/--- #/g, '<hr style="margin:20px 0;border:none;border-top:1px solid rgba(255,255,255,0.08)"><h2>')
+                .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+                .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+                .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+                .replace(/^---$/gm, '<hr style="margin:20px 0;border:none;border-top:1px solid rgba(255,255,255,0.08)">')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/^- (.+)$/gm, '<li>$1</li>')
+                .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+                .replace(/^([^<\n].+)$/gm, '<p>$1</p>')
+                .replace(/<p><\/p>/g, '')
+                .replace(/<p>(<h[1-6]>)/g, '$1')
+                .replace(/(<\/h[1-6]>)<\/p>/g, '$1');
+        }
+
+        function showAgr(type) {
+            var modal = document.getElementById(type + 'Modal');
+            modal.classList.add('show');
+            var body = document.getElementById(type + 'Body');
+            body.scrollTop = 0;
+            var fileName = type === 'terms' ? 'terms_of_service.md' : 'privacy_policy.md';
+            fetch('/Agreement/' + fileName)
+                .then(function(r) { if (!r.ok) throw new Error('fail'); return r.text(); })
+                .then(function(c) { body.innerHTML = renderMd(c); onAgrScroll(body, type); })
+                .catch(function() { body.innerHTML = '<div style="text-align:center;padding:40px;color:#ff6b6b">加载失败，请稍后重试</div>'; });
+        }
+
+        document.getElementById('showTerms').addEventListener('click', function(e) { e.preventDefault(); showAgr('terms'); });
+        document.getElementById('showPrivacy').addEventListener('click', function(e) { e.preventDefault(); showAgr('privacy'); });
+
+        window.closeAgr = function(type) {
+            document.getElementById(type + 'Modal').classList.remove('show');
+            if (type === 'terms' && termsInterval) { clearInterval(termsInterval); termsInterval = null; }
+            if (type === 'privacy' && privacyInterval) { clearInterval(privacyInterval); privacyInterval = null; }
+        };
+
+        window.onAgrScroll = function(el, type) {
+            var fill = document.getElementById(type + 'BarFill');
+            var pct = document.getElementById(type + 'Percent');
+            var timer = document.getElementById(type + 'Timer');
+            var btn = document.getElementById(type + 'AgreeBtn');
+            var sh = el.scrollHeight - el.clientHeight;
+            var progress = sh > 0 ? Math.round((el.scrollTop / sh) * 100) : 100;
+            fill.style.width = progress + '%';
+            pct.textContent = progress + '%';
+            if (progress >= 50) {
+                if (type === 'terms' && !termsStartTime) {
+                    termsStartTime = Date.now();
+                    timer.textContent = '✓'; timer.classList.add('done'); btn.disabled = false;
+                }
+                if (type === 'privacy' && !privacyStartTime) {
+                    privacyStartTime = Date.now();
+                    timer.textContent = '✓'; timer.classList.add('done'); btn.disabled = false;
+                }
+            }
+        };
+
+        window.agreeAgr = function(type) {
+            if (type === 'terms') { termsAgreed = true; document.getElementById('termsAgreeBtn').textContent = '已同意'; }
+            if (type === 'privacy') { privacyAgreed = true; document.getElementById('privacyAgreeBtn').textContent = '已同意'; }
+            updateAgrStatus();
+            closeAgr(type);
+        };
+
+        function updateAgrStatus() {
+            var s = document.getElementById('agrStatus');
+            var n = document.getElementById('agrNotice');
+            var btn = document.getElementById('regBtn');
+            if (termsAgreed && privacyAgreed) {
+                s.textContent = '（已同意）';
+                n.classList.add('done');
+                btn.disabled = false;
+                btn.textContent = '创建账户';
+            } else {
+                var arr = [];
+                if (!termsAgreed) arr.push('服务条款');
+                if (!privacyAgreed) arr.push('隐私政策');
+                s.textContent = '（需阅读：' + arr.join('、') + '）';
+                n.classList.remove('done');
+                btn.disabled = true;
+                btn.textContent = '请先阅读协议';
+            }
+        }
+
+        // 注册时检查协议
+        var origRegHandler = document.getElementById('registerForm').onsubmit;
+        document.getElementById('registerForm').addEventListener('submit', function(e) {
+            if (!termsAgreed || !privacyAgreed) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                showMsg('请先阅读并同意服务条款和隐私政策', false);
+                return;
+            }
+        }, true);
+
+        // URL 参数控制默认 tab
+        if (new URLSearchParams(location.search).get('tab') === 'register') {
+            tabs[1].click();
+        }
+    })();
+    </script>
+</body>
+</html>
