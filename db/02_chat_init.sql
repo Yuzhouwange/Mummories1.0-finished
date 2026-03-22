@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
     has_security_question BOOLEAN DEFAULT FALSE,
     security_question VARCHAR(255) DEFAULT NULL,
     security_answer VARCHAR(255) DEFAULT NULL,
+    agreed_to_terms BOOLEAN NOT NULL DEFAULT FALSE,
     last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

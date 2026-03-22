@@ -640,9 +640,6 @@ function handleBlog(mysqli $db, string $method, array $body, string $ip, array $
         // 设置 session
         $_SESSION['blog_user_id'] = $userId;
 
-        // 同步到聊天室 session
-        writeChatSession($userId, $username, $email, '');
-
         // 自动添加 Bot 助手为好友并发送欢迎消息
         try {
             global $env;
@@ -685,6 +682,9 @@ function handleBlog(mysqli $db, string $method, array $body, string $ip, array $
         } catch (\Exception $e) {
             error_log("注册时添加Bot好友失败: " . $e->getMessage());
         }
+
+        // 同步到聊天室 session（在 chat 用户已同步之后）
+        writeChatSession($userId, $username, $email, '');
 
         ok(['id' => $userId, 'username' => $username], '注册成功');
     }
@@ -753,7 +753,26 @@ function handleBlog(mysqli $db, string $method, array $body, string $ip, array $
 }
 
 // 写入聊天室所需的默认 PHP session
-function writeChatSession(int $userId, string $username, string $email, string $avatar): void {
+function writeChatSession(int $blogUserId, string $username, string $email, string $avatar): void {
+    // 查找聊天数据库中对应的真实 user ID（chat.users.id 与 blog.users.id 不同）
+    global $env;
+    $chatUserId = $blogUserId; // fallback
+    $chatDb = @new mysqli(
+        $env['DB_HOST'] ?? 'db',
+        $env['DB_USER'] ?? 'root',
+        $env['DB_PASSWORD'] ?? '',
+        'chat'
+    );
+    if ($chatDb && !$chatDb->connect_error) {
+        $chatDb->set_charset('utf8mb4');
+        $emailE = $chatDb->real_escape_string($email);
+        $r = $chatDb->query("SELECT id FROM users WHERE email='$emailE' AND is_deleted=FALSE LIMIT 1");
+        if ($r && $row = $r->fetch_assoc()) {
+            $chatUserId = (int)$row['id'];
+        }
+        $chatDb->close();
+    }
+
     // 获取当前 HP session id 备份
     $hpSid = session_id();
     session_write_close();
@@ -767,7 +786,7 @@ function writeChatSession(int $userId, string $username, string $email, string $
         session_id($_COOKIE['PHPSESSID']);
     }
     session_start();
-    $_SESSION['user_id']  = $userId;
+    $_SESSION['user_id']  = $chatUserId;
     $_SESSION['username'] = $username;
     $_SESSION['email']    = $email;
     $_SESSION['avatar']   = $avatar;
