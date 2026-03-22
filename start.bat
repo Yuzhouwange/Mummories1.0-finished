@@ -58,6 +58,7 @@ echo.
 echo [2/6] Checking ports...
 set HTTP_PORT=8080
 set PMA_PORT=9888
+set APP_ALREADY_RUNNING=
 
 if exist ".env" (
     for /f "tokens=1,2 delims==" %%a in (.env) do (
@@ -67,12 +68,19 @@ if exist ".env" (
 )
 
 netstat -ano | findstr ":%HTTP_PORT% " | findstr "LISTENING" >nul 2>&1
-if not errorlevel 1 goto :PORT_BUSY
+if not errorlevel 1 goto :CHECK_EXISTING_APP
 echo      Port %HTTP_PORT% - available
 goto :CHECK_PMA_PORT
 
+:CHECK_EXISTING_APP
+docker compose ps nginx 2>nul | findstr /c:"0.0.0.0:%HTTP_PORT%->80/tcp" >nul 2>&1
+if errorlevel 1 goto :PORT_BUSY
+set APP_ALREADY_RUNNING=1
+echo  [~] Port %HTTP_PORT% is already used by this project
+goto :CHECK_PMA_PORT
+
 :PORT_BUSY
-echo  [X] Port %HTTP_PORT% is in use
+echo  [X] Port %HTTP_PORT% is in use by another program
 echo      Edit HTTP_PORT in .env or close the program using that port
 pause
 exit /b 1
@@ -110,6 +118,8 @@ goto :CHECK_CHAT_ENV
 echo  [X] Failed to generate .env
 pause
 exit /b 1
+
+:ENV_EXISTS
 echo      .env - exists
 
 :CHECK_CHAT_ENV
@@ -165,6 +175,8 @@ echo.
 echo [5/6] Building and starting (first run takes 2-5 min)...
 echo.
 
+if defined APP_ALREADY_RUNNING goto :ALREADY_RUNNING
+
 :: Try full deploy first; if PMA port is busy, retry without phpMyAdmin
 docker compose up -d --build 2>"%TEMP%\mummories_build.log"
 if errorlevel 1 (
@@ -180,6 +192,10 @@ if errorlevel 1 (
     )
 )
 goto :HEALTH_CHECK
+
+:ALREADY_RUNNING
+echo      Services are already running, skipping rebuild
+goto :SHOW_RESULT
 
 :BUILD_FAIL
 echo.
@@ -234,17 +250,18 @@ echo   Chat:        http://localhost:%HTTP_PORT%/chat
 echo   Admin:       http://localhost:%HTTP_PORT%/admin
 echo   phpMyAdmin:  http://localhost:%PMA_PORT%
 echo.
-echo   API Key:     %FINAL_API_KEY%
-echo   (saved in .env)
-echo.
 echo  ----------------------------------------
-echo   First time? Register at the blog page.
-echo   Admin panel uses the API Key above.
+echo   Admin API Key: %FINAL_API_KEY%
+echo   (saved in .env file)
+echo  ----------------------------------------
+echo.
+echo   First time? Register at the blog page,
+echo   then login to admin with the API Key.
+echo   Bot assistant auto-added as friend.
 echo  ----------------------------------------
 echo.
 
-choice /c YN /t 5 /d Y /m "Open browser? (Y/N, auto-open in 5s)"
-if %errorlevel% equ 1 start http://localhost:%HTTP_PORT%
+start http://localhost:%HTTP_PORT%
 
 pause
 

@@ -471,3 +471,11 @@ CREATE INDEX idx_announcements_is_active ON announcements(is_active);
 CREATE INDEX idx_announcements_created_at ON announcements(created_at);
 CREATE INDEX idx_user_announcement_read_user_id ON user_announcement_read(user_id);
 CREATE INDEX idx_user_announcement_read_announcement_id ON user_announcement_read(announcement_id);
+
+-- Bot 助手用户
+INSERT INTO users (username, email, password, avatar, status, is_admin)
+SELECT 'Mummories助手', 'bot@mummories.local',
+       '$2y$10$botplaceholderpasswordhashnotloginable000000000000000000',
+       'https://ui-avatars.com/api/?name=Bot&background=6366f1&color=fff&size=128&bold=true',
+       'online', FALSE
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='bot@mummories.local');

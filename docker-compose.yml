@@ -14,7 +14,6 @@ services:
     volumes:
       - ./backend:/var/www/backend
       - ./chat:/var/www/chat
-    restart: always
     networks:
       - mummories-net
 
@@ -30,7 +29,6 @@ services:
       - ./backend:/var/www/backend
       - ./chat:/var/www/chat
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-    restart: always
     networks:
       - mummories-net
 
@@ -46,7 +44,6 @@ services:
       - mummories_db:/var/lib/mysql
       - ./db/init.sql:/docker-entrypoint-initdb.d/01_init.sql
       - ./db/02_chat_init.sql:/docker-entrypoint-initdb.d/02_chat_init.sql
-    restart: always
     networks:
       - mummories-net
     healthcheck:
@@ -68,7 +65,6 @@ services:
       UPLOAD_LIMIT: 100M
     ports:
       - "${PHPMYADMIN_PORT:-9888}:80"
-    restart: always
     networks:
       - mummories-net
 

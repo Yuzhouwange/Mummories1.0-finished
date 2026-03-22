@@ -643,6 +643,49 @@ function handleBlog(mysqli $db, string $method, array $body, string $ip, array $
         // 同步到聊天室 session
         writeChatSession($userId, $username, $email, '');
 
+        // 自动添加 Bot 助手为好友并发送欢迎消息
+        try {
+            global $env;
+            $chatDb = @new mysqli(
+                $env['DB_HOST'] ?? 'db',
+                $env['DB_USER'] ?? 'root',
+                $env['DB_PASSWORD'] ?? '',
+                'chat'
+            );
+            if (!$chatDb->connect_error) {
+                $chatDb->set_charset('utf8mb4');
+                // 同步用户到聊天室
+                $usernameC = $chatDb->real_escape_string($username);
+                $emailC = $chatDb->real_escape_string($email);
+                $hashC = $chatDb->real_escape_string($hash);
+                $chatDb->query("INSERT IGNORE INTO users (username, email, password, status) VALUES ('$usernameC','$emailC','$hashC','online')");
+                $chatUserId = $chatDb->insert_id ?: 0;
+                if (!$chatUserId) {
+                    $cr = $chatDb->query("SELECT id FROM users WHERE email='$emailC' LIMIT 1");
+                    if ($cr && $row = $cr->fetch_assoc()) $chatUserId = (int)$row['id'];
+                }
+                // 查找 Bot 用户
+                $botRow = $chatDb->query("SELECT id FROM users WHERE email='bot@mummories.local' AND is_deleted=FALSE LIMIT 1");
+                $bot = $botRow ? $botRow->fetch_assoc() : null;
+                if ($bot && $chatUserId) {
+                    $botId = (int)$bot['id'];
+                    $chatDb->query("INSERT IGNORE INTO friends (user_id, friend_id, status) VALUES ($botId, $chatUserId, 'accepted')");
+                    $chatDb->query("INSERT IGNORE INTO friends (user_id, friend_id, status) VALUES ($chatUserId, $botId, 'accepted')");
+                    $welcome = $chatDb->real_escape_string('欢迎加入 Mummories！我是你的助手 🤖 有什么可以帮你的吗？');
+                    $chatDb->query("INSERT INTO messages (sender_id, receiver_id, content, type, status) VALUES ($botId, $chatUserId, '$welcome', 'text', 'sent')");
+                }
+                // 添加到全员群聊
+                $grpRes = $chatDb->query("SELECT id FROM `groups` WHERE all_user_group=1");
+                while ($grpRes && $grp = $grpRes->fetch_assoc()) {
+                    $gid = (int)$grp['id'];
+                    $chatDb->query("INSERT IGNORE INTO group_members (group_id, user_id, role) VALUES ($gid, $chatUserId, 'member')");
+                }
+                $chatDb->close();
+            }
+        } catch (\Exception $e) {
+            error_log("注册时添加Bot好友失败: " . $e->getMessage());
+        }
+
         ok(['id' => $userId, 'username' => $username], '注册成功');
     }
 

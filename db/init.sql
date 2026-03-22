@@ -253,3 +253,14 @@ INSERT INTO homepage_profile (`key`, `value`) VALUES
     ('email', 'admin@mummories.cn'),
     ('skills', 'HTML,CSS,JavaScript,PHP,Vue,Docker')
 ON DUPLICATE KEY UPDATE `value`=VALUES(`value`);
+
+-- Bot 助手用户
+INSERT INTO users (username, email, password, display_name, bio, skills, avatar, is_admin, agreed_to_terms)
+SELECT 'Mummories助手', 'bot@mummories.local',
+       '$2y$10$botplaceholderpasswordhashnotloginable000000000000000000',
+       'Mummories助手',
+       '我是 Mummories 智能助手 🤖，随时为你提供帮助！',
+       '["AI","聊天机器人","博客助手"]',
+       'https://ui-avatars.com/api/?name=Bot&background=6366f1&color=fff&size=128&bold=true',
+       0, 1
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='bot@mummories.local');
