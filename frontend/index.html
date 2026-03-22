@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人主页</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- 背景层（默认碧蓝档案图） -->
+    <div class="bg" id="bgLayer">
+        <!-- 随机二次元美图背景（JS 自动加载） -->
+        <img class="bg-image" id="bgImage" alt="" style="display:none">
+        <div class="pattern-bg">
+            <svg class="cube-svg" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <pattern id="cube" x="0" y="0" width="60" height="52" patternUnits="userSpaceOnUse">
+                        <path d="M30 0 L60 15 L60 41 L30 52 L0 41 L0 15 Z" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/>
+                        <path d="M30 26 L60 15 M30 26 L0 15 M30 26 L30 52" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="0.5"/>
+                    </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#cube)"/>
+            </svg>
+        </div>
+    </div>
+    <div class="bg-blur" id="bgBlurLayer"></div>
+
+    <!-- 整体布局：顶栏 + 侧边栏 + 主内容（Mummories 布局） -->
+    <div class="layout">
+        <!-- 顶栏 -->
+        <header class="header">
+            <div class="header-logo">我的主页</div>
+            <!-- Mummories 风格 Tab 页签 -->
+            <div class="tab-bar" id="tabBar">
+                <div class="tab-item active" data-tab="home">
+                    <span>首页</span>
+                </div>
+                <div class="tab-item" data-tab="contact">
+                    <span>联系方式</span>
+                    <button class="tab-close" data-tab="contact">&times;</button>
+                </div>
+                <a class="tab-item tab-link" href="projects.html">
+                    <span>项目管理</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                </a>
+                <div class="tab-item" data-tab="chatroom">
+                    <span>聊天室</span>
+                </div>
+                <a class="tab-item tab-link" href="admin.html">
+                    <span>管理后台</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z"/></svg>
+                </a>
+            </div>
+            <div class="header-right">
+                <button class="glass-btn btn-sm" id="bgSettingsBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                    背景
+                </button>
+                <button class="glass-btn btn-sm" id="skinBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+                    换肤
+                </button>
+            </div>
+        </header>
+
+        <div class="body-wrapper">
+            <!-- 左侧栏 -->
+            <aside class="sidebar">
+                <!-- 头像 -->
+                <div class="avatar-wrap">
+                    <div class="avatar" id="avatarWrap" title="点击上传头像">
+                        <img class="avatar-img" id="avatarImg" src="/api/v1/avatar" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display=''">
+                        <div class="avatar-placeholder" id="avatarPh">头像</div>
+                    </div>
+                    <input type="file" id="avatarFileInput" accept="image/*" style="display:none">
+                </div>
+
+                <!-- 联系方式图标 -->
+                <div class="glass-radio-group">
+                    <input type="radio" name="icon" id="glass-mail" checked>
+                    <label for="glass-mail" aria-label="邮件">
+                        <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                    </label>
+                    <input type="radio" name="icon" id="glass-chat">
+                    <label for="glass-chat" aria-label="微信">
+                        <svg viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
+                    </label>
+                    <input type="radio" name="icon" id="glass-link">
+                    <label for="glass-link" aria-label="链接">
+                        <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    </label>
+                    <input type="radio" name="icon" id="glass-github">
+                    <label for="glass-github" aria-label="主页">
+                        <svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3z"/></svg>
+                    </label>
+                    <div class="glass-glider"></div>
+                </div>
+
+                <!-- 侧边导航（Mummories 滑动指示器） -->
+                <div class="radio-container" style="--total-radio: 4;">
+                    <input type="radio" name="nav" id="nav-about" checked>
+                    <label for="nav-about" data-section="about">关于</label>
+                    <input type="radio" name="nav" id="nav-skills">
+                    <label for="nav-skills" data-section="skills">技能</label>
+                    <input type="radio" name="nav" id="nav-contact">
+                    <label for="nav-contact" data-section="contact">联系</label>
+                    <input type="radio" name="nav" id="nav-message">
+                    <label for="nav-message" data-section="message">留言</label>
+                    <div class="glider-container">
+                        <div class="glider"></div>
+                    </div>
+                </div>
+
+                <!-- Mummories 管理菜单 -->
+                <div class="side-menu">
+                    <div class="side-menu-title">快捷入口 <button class="edit-btn user-only" id="editShortcutsBtn" title="编辑"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button></div>
+                    <a class="side-menu-item user-only" href="#" id="privacySettingsBtn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        隐私设置
+                    </a>
+                    <div id="shortcutsList">
+                        <a class="side-menu-item" href="articles.html">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
+                            文章
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left:auto;opacity:0.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        </a>
+                        <a class="side-menu-item" href="moments.html">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            说说
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left:auto;opacity:0.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        </a>
+                        <a class="side-menu-item" href="projects.html">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+                            项目管理
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left:auto;opacity:0.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        </a>
+                        <a class="side-menu-item" href="#" onclick="event.preventDefault();document.querySelector('[data-tab=chatroom]').click()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
+                            聊天室
+                        </a>
+                        <a class="side-menu-item user-only" href="friends.html">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                            好友列表
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left:auto;opacity:0.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        </a>
+                        <a class="side-menu-item" href="ui.html">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                            UI组件库
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left:auto;opacity:0.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        </a>
+                        <a class="side-menu-item" href="creative.html">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                            创意作品
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left:auto;opacity:0.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        </a>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- 主内容区 -->
+            <main class="main-content" id="mainContent">
+                <!-- 标题区 -->
+                <div class="hero-section fade-in">
+                    <h1 class="title-wrap">
+                        <span class="title-gradient">Mummories</span>
+                    </h1>
+                    <!-- 彩色渐变介绍横幅 -->
+                    <div class="pixel-banner">
+                        <div class="pixel-grid" id="pixelGrid"></div>
+                    </div>
+                </div>
+
+                <!-- 关于 -->
+                <section class="content-card glass-card fade-in" id="about">
+                    <div class="section-header"><h3 class="section-title">关于我</h3><button class="edit-btn admin-only" data-edit="about" title="编辑"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button></div>
+                    <p class="intro-text">
+                        我是一个热爱前端与视觉设计的开发者，喜欢折腾各种炫酷但不浮夸的交互效果，
+                        也在不断打磨自己在工程化、性能优化和产品体验上的能力。如果你有有趣的想法、
+                        项目或合作机会，欢迎随时通过下方联系方式来找我聊聊。
+                    </p>
+                </section>
+
+                <!-- 技能 -->
+                <section class="content-card glass-card fade-in" id="skills">
+                    <div class="section-header"><h3 class="section-title">技能</h3><button class="edit-btn user-only" data-edit="skills" title="编辑技能"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button></div>
+                    <div class="skills-grid">
+                        <span class="skill-tag">HTML / CSS</span>
+                        <span class="skill-tag">JavaScript</span>
+                        <span class="skill-tag">TypeScript</span>
+                        <span class="skill-tag">Vue.js</span>
+                        <span class="skill-tag">React</span>
+                        <span class="skill-tag">Node.js</span>
+                        <span class="skill-tag">UI/UX 设计</span>
+                        <span class="skill-tag">Git</span>
+                        <span class="skill-tag">Webpack</span>
+                        <span class="skill-tag">Docker</span>
+                    </div>
+                </section>
+
+                <!-- 快捷卡片：文章 & 说说 & 项目管理 & 聊天室 -->
+                <div class="quick-links fade-in">
+                    <a class="quick-link-card glass-card" href="articles.html">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
+                        <div>
+                            <div class="quick-link-title">文章</div>
+                            <div class="quick-link-desc">浏览和发布博客文章</div>
+                        </div>
+                        <svg class="quick-link-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                    </a>
+                    <a class="quick-link-card glass-card" href="moments.html">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        <div>
+                            <div class="quick-link-title">说说</div>
+                            <div class="quick-link-desc">分享日常动态</div>
+                        </div>
+                        <svg class="quick-link-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                    </a>
+                    <a class="quick-link-card glass-card" href="projects.html">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+                        <div>
+                            <div class="quick-link-title">项目管理</div>
+                            <div class="quick-link-desc">管理和查看所有项目</div>
+                        </div>
+                        <svg class="quick-link-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                    </a>
+                    <div class="quick-link-card glass-card" style="cursor:pointer" onclick="document.querySelector('[data-tab=chatroom]').click()">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
+                        <div>
+                            <div class="quick-link-title">聊天室</div>
+                            <div class="quick-link-desc">进入实时聊天</div>
+                        </div>
+                        <svg class="quick-link-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                    </div>
+                </div>
+
+                <!-- 联系方式 -->
+                <section class="content-card glass-card fade-in" id="contact">
+                    <div class="section-header"><h3 class="section-title">联系方式</h3><button class="edit-btn admin-only" data-edit="contact" title="编辑联系方式"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button></div>
+                    <div class="contact-info">
+                        <div class="contact-item" data-type="email">
+                            <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                            Email: <span class="contact-value">example@email.com</span>
+                        </div>
+                        <div class="contact-item" data-type="wechat">
+                            <svg viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
+                            WeChat: <span class="contact-value">example_wechat</span>
+                        </div>
+                        <div class="contact-item">
+                            <svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3z"/></svg>
+                            Mummories V1.0
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 邮件留言 -->
+                <section class="content-card glass-card fade-in" id="message">
+                    <h3 class="section-title">邮件留言</h3>
+                    <form class="email-form" id="emailForm">
+                        <div class="email-row-inline">
+                            <div class="email-field">
+                                <label class="email-label">称呼</label>
+                                <input class="glass-input" type="text" placeholder="怎么称呼你？">
+                            </div>
+                            <div class="email-field">
+                                <label class="email-label">邮箱</label>
+                                <input class="glass-input" type="email" placeholder="你的邮箱">
+                            </div>
+                        </div>
+                        <div class="email-field">
+                            <label class="email-label">留言内容</label>
+                            <textarea class="glass-input glass-textarea" rows="3" placeholder="写下你想说的话..."></textarea>
+                        </div>
+                        <div class="email-actions">
+                            <button class="glass-btn btn-primary" type="submit">发送留言</button>
+                            <span class="email-hint">留言将保存至站点，我会尽快回复</span>
+                        </div>
+                    </form>
+                </section>
+            </main>
+
+            <!-- 聊天室（内嵌，与 main-content 平级） -->
+            <div id="chatroomPanel" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
+                <div style="height:100%;display:flex;flex-direction:column;background:var(--card-bg);backdrop-filter:blur(var(--glass-blur)) saturate(120%);-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(120%);border-radius:16px;border:1px solid var(--card-border);margin:16px;overflow:hidden;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0;">
+                        <div style="font-size:15px;font-weight:600;color:#fff;display:flex;align-items:center;gap:8px;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
+                            Mummories 聊天室
+                        </div>
+                        <div style="display:flex;gap:8px;">
+                            <a id="chatNewWindowLink" href="#" target="_blank" class="glass-btn btn-sm" style="text-decoration:none;font-size:11px;padding:4px 12px;">新窗口打开</a>
+                            <button class="glass-btn btn-sm" style="font-size:11px;padding:4px 12px;" onclick="var f=document.getElementById('embeddedChatFrame');f.src=f.src;">刷新</button>
+                        </div>
+                    </div>
+                    <iframe id="embeddedChatFrame" allow="microphone;camera;clipboard-write" style="flex:1;border:none;width:100%;min-height:0;" src="/chat/chat.php"></iframe>
+                    <script>
+                    (function(){
+                        var l = document.getElementById('chatNewWindowLink');
+                        if(l) l.href = '/chat/chat.php';
+                    })();
+                    </script>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 背景设置弹窗 -->
+    <div class="modal-overlay" id="bgModal">
+        <div class="modal glass-card">
+            <div class="modal-header">
+                <h3>背景设置</h3>
+                <button class="modal-close" id="bgModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="email-field">
+                    <label class="email-label">随机二次元美图</label>
+                    <div style="display:flex;gap:8px">
+                        <button class="glass-btn btn-primary" id="bgRandomBtn">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+                            换一张美图
+                        </button>
+                        <button class="glass-btn" id="bgSaveBtn">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            保存原图
+                        </button>
+                    </div>
+                </div>
+                <div class="bg-divider"></div>
+                <div class="email-field">
+                    <label class="email-label">背景模式</label>
+                    <select class="glass-input glass-select" id="bgMode">
+                        <option value="image" selected>自定义图片</option>
+                        <option value="default">默认纹理</option>
+                    </select>
+                </div>
+                <div class="email-field" id="bgImageField">
+                    <label class="email-label">自定义图片地址</label>
+                    <input class="glass-input" type="url" id="bgImageUrl" placeholder="粘贴图片URL..." value="">
+                    <button class="glass-btn btn-primary" style="margin-top:8px" id="bgApplyImage">应用</button>
+                </div>
+                <div class="email-field">
+                    <label class="email-label">毛玻璃模糊度: <span id="blurValue">4</span>px</label>
+                    <input type="range" class="glass-range" id="bgBlur" min="0" max="30" value="4">
+                </div>
+                <div class="email-field">
+                    <label class="email-label">遮罩透明度: <span id="opacityValue">25</span>%</label>
+                    <input type="range" class="glass-range" id="bgOpacity" min="0" max="100" value="25">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 换肤面板 -->
+    <div class="modal-overlay" id="skinModal">
+        <div class="modal glass-card">
+            <div class="modal-header">
+                <h3>主题换肤</h3>
+                <button class="modal-close" id="skinModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="skin-grid">
+                    <div class="skin-item active" data-skin="default" style="background:linear-gradient(135deg,#667eea,#764ba2);"></div>
+                    <div class="skin-item" data-skin="ocean" style="background:linear-gradient(135deg,#0575E6,#00F260);"></div>
+                    <div class="skin-item" data-skin="sunset" style="background:linear-gradient(135deg,#f093fb,#f5576c);"></div>
+                    <div class="skin-item" data-skin="forest" style="background:linear-gradient(135deg,#11998e,#38ef7d);"></div>
+                    <div class="skin-item" data-skin="fire" style="background:linear-gradient(135deg,#f12711,#f5af19);"></div>
+                    <div class="skin-item" data-skin="night" style="background:linear-gradient(135deg,#232526,#414345);"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 网页宠物 -->
+    <div class="web-pet" id="webPet">
+        <div class="pet-body" id="petBody">
+            <div class="pet-face">
+                <div class="pet-eyes">
+                    <span class="pet-eye left"></span>
+                    <span class="pet-eye right"></span>
+                </div>
+                <div class="pet-mouth"></div>
+            </div>
+        </div>
+        <div class="pet-msg" id="petMsg">你好呀~ 点我说话！</div>
+    </div>
+
+    <!-- 沉浸看图按钮 -->
+    <button class="zen-toggle" id="zenToggle" title="沉浸看图">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+
+    <script src="app.js?v=5"></script>
+</body>
+</html>

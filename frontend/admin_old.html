@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mummories Admin</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { overflow: auto; }
+        .admin-page { position: relative; z-index: 2; max-width: 1100px; margin: 0 auto; padding: 24px; min-height: 100vh; }
+        .admin-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+        .admin-header h1 { font-size: 22px; font-weight: 700; }
+        .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); text-decoration: none; font-size: 13px; padding: 6px 14px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); transition: all 0.25s; }
+        .back-link:hover { color: #fff; background: rgba(255,255,255,0.12); }
+        .admin-status { margin-left: auto; font-size: 12px; color: var(--text-muted); }
+        .admin-status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+        .dot-green { background: #6bcb77; }
+        .dot-red { background: #ff6b6b; }
+
+        /* 登录面板 */
+        .login-card { max-width: 360px; margin: 120px auto; }
+        .login-card h2 { font-size: 20px; margin-bottom: 16px; }
+
+        /* 选项卡 */
+        .admin-tabs { display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap; }
+        .admin-tab { padding: 8px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); color: var(--text-muted); transition: all 0.2s; }
+        .admin-tab:hover { background: rgba(255,255,255,0.1); }
+        .admin-tab.active { background: rgba(255,255,255,0.12); color: #fff; border-color: rgba(255,255,255,0.2); }
+        .admin-panel { display: none; }
+        .admin-panel.active { display: block; }
+
+        /* 仪表盘 */
+        .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .dash-card { padding: 20px; border-radius: 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); }
+        .dash-card .num { font-size: 28px; font-weight: 700; }
+        .dash-card .label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+        .trend-bar { display: flex; align-items: flex-end; gap: 6px; height: 80px; margin-top: 12px; }
+        .trend-col { flex: 1; background: rgba(107,203,119,0.4); border-radius: 4px 4px 0 0; min-width: 8px; position: relative; transition: height 0.3s; }
+        .trend-col .trend-label { position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%); font-size: 9px; color: var(--text-muted); white-space: nowrap; }
+
+        /* 通用表格 */
+        .admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .admin-table th { text-align: left; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); font-weight: 500; }
+        .admin-table td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); word-break: break-word; }
+        .admin-table tr:hover td { background: rgba(255,255,255,0.03); }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; }
+        .badge-green { background: rgba(107,203,119,0.15); color: #6bcb77; }
+        .badge-yellow { background: rgba(255,217,61,0.15); color: #ffd93d; }
+        .badge-red { background: rgba(255,107,107,0.15); color: #ff6b6b; }
+
+        /* 编辑区域 */
+        .edit-group { margin-bottom: 20px; }
+        .edit-group label { font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 5px; }
+        .edit-group .glass-input { width: 100%; box-sizing: border-box; }
+        .edit-row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .edit-row .edit-group { flex: 1; min-width: 200px; }
+        .edit-actions { display: flex; gap: 10px; margin-top: 16px; }
+        .msg-ok { color: #6bcb77; font-size: 12px; margin-left: 8px; }
+        .msg-err { color: #ff6b6b; font-size: 12px; margin-left: 8px; }
+
+        /* 头像预览 */
+        .avatar-preview { width: 80px; height: 80px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.15); object-fit: cover; background: rgba(255,255,255,0.05); }
+        .avatar-upload { display: flex; align-items: center; gap: 16px; }
+
+        /* 页面编辑 */
+        .page-editor textarea { min-height: 200px; font-family: inherit; }
+        .page-list-item { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 10px; background: rgba(255,255,255,0.04); margin-bottom: 8px; cursor: pointer; transition: background 0.2s; }
+        .page-list-item:hover { background: rgba(255,255,255,0.08); }
+        .page-list-item .title { flex: 1; font-weight: 500; }
+        .page-list-item .slug { font-size: 11px; color: var(--text-muted); }
+    </style>
+</head>
+<body>
+    <div class="bg" id="bgLayer">
+        <img class="bg-image" id="bgImage" alt="" style="display:none">
+        <div class="pattern-bg">
+            <svg class="cube-svg" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
+                <defs><pattern id="cube" x="0" y="0" width="60" height="52" patternUnits="userSpaceOnUse"><path d="M30 0 L60 15 L60 41 L30 52 L0 41 L0 15 Z" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/><path d="M30 26 L60 15 M30 26 L0 15 M30 26 L30 52" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="0.5"/></pattern></defs>
+                <rect width="100%" height="100%" fill="url(#cube)"/>
+            </svg>
+        </div>
+    </div>
+    <div class="bg-blur" id="bgBlurLayer"></div>
+
+    <!-- 登录面板 -->
+    <div id="loginView">
+        <div class="login-card content-card glass-card">
+            <h2>Mummories Admin</h2>
+            <div class="edit-group">
+                <label>管理员密钥</label>
+                <input type="password" class="glass-input" id="loginKey" placeholder="请输入密钥..." autocomplete="off">
+            </div>
+            <div id="loginErr" class="msg-err" style="display:none"></div>
+            <button class="glass-btn btn-primary" id="loginBtn" style="width:100%;margin-top:10px;">登录</button>
+        </div>
+    </div>
+
+    <!-- 管理面板 -->
+    <div id="adminView" style="display:none">
+        <div class="admin-page">
+            <div class="admin-header">
+                <a class="back-link" href="index.html">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+                    返回主页
+                </a>
+                <h1>管理后台</h1>
+                <div class="admin-status">
+                    <span class="dot dot-green"></span>已登录
+                    <button class="glass-btn btn-sm" id="logoutBtn" style="margin-left:8px;">退出</button>
+                </div>
+            </div>
+
+            <div class="admin-tabs" id="adminTabs">
+                <div class="admin-tab active" data-panel="dashboard">仪表盘</div>
+                <div class="admin-tab" data-panel="profile">个人资料</div>
+                <div class="admin-tab" data-panel="pages">自定义页面</div>
+                <div class="admin-tab" data-panel="contacts">留言管理</div>
+            </div>
+
+            <!-- ========= 仪表盘 ========= -->
+            <div class="admin-panel active" id="panel-dashboard">
+                <div class="dash-grid" id="dashGrid"></div>
+                <div class="content-card glass-card" style="margin-bottom:20px;">
+                    <h3 class="section-title">7日留言趋势</h3>
+                    <div class="trend-bar" id="trendBar"></div>
+                </div>
+                <div class="content-card glass-card">
+                    <h3 class="section-title">最近留言</h3>
+                    <table class="admin-table" id="recentTable"><tbody></tbody></table>
+                </div>
+            </div>
+
+            <!-- ========= 个人资料编辑 ========= -->
+            <div class="admin-panel" id="panel-profile">
+                <div class="content-card glass-card">
+                    <h3 class="section-title">头像</h3>
+                    <div class="avatar-upload">
+                        <img class="avatar-preview" id="avatarPreview" src="/api/v1/avatar" onerror="this.style.display='none'">
+                        <div>
+                            <input type="file" id="avatarFile" accept="image/*" style="display:none">
+                            <button class="glass-btn btn-primary" id="avatarBtn">上传头像</button>
+                            <span id="avatarMsg"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="content-card glass-card" style="margin-top:16px;">
+                    <h3 class="section-title">基本信息</h3>
+                    <div class="edit-row">
+                        <div class="edit-group"><label>名字</label><input class="glass-input" id="pf_name"></div>
+                        <div class="edit-group"><label>邮箱</label><input class="glass-input" id="pf_email"></div>
+                        <div class="edit-group"><label>微信</label><input class="glass-input" id="pf_wechat"></div>
+                    </div>
+                    <div class="edit-group"><label>简介</label><textarea class="glass-input glass-textarea" id="pf_bio" rows="3"></textarea></div>
+                    <div class="edit-group"><label>技能（逗号分隔）</label><input class="glass-input" id="pf_skills"></div>
+                    <div class="edit-actions">
+                        <button class="glass-btn btn-primary" id="profileSaveBtn">保存</button>
+                        <span id="profileMsg"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========= 自定义页面 ========= -->
+            <div class="admin-panel" id="panel-pages">
+                <div class="content-card glass-card" style="margin-bottom:16px;">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                        <h3 class="section-title" style="margin-bottom:0;">页面列表</h3>
+                        <button class="glass-btn btn-primary btn-sm" id="newPageBtn">+ 新建</button>
+                    </div>
+                    <div id="pagesList"></div>
+                </div>
+                <div class="content-card glass-card page-editor" id="pageEditor" style="display:none;">
+                    <h3 class="section-title" id="pageEditorTitle">编辑页面</h3>
+                    <input type="hidden" id="pe_id">
+                    <div class="edit-row">
+                        <div class="edit-group"><label>标题</label><input class="glass-input" id="pe_title"></div>
+                        <div class="edit-group"><label>Slug</label><input class="glass-input" id="pe_slug" placeholder="url-friendly-name"></div>
+                        <div class="edit-group"><label>图标</label><input class="glass-input" id="pe_icon" value="file"></div>
+                    </div>
+                    <div class="edit-group"><label>内容（支持 HTML）</label><textarea class="glass-input glass-textarea" id="pe_content" rows="10"></textarea></div>
+                    <div class="edit-actions">
+                        <button class="glass-btn btn-primary" id="pageSaveBtn">保存</button>
+                        <button class="glass-btn" id="pageCancelBtn">取消</button>
+                        <span id="pageMsg"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========= 留言管理 ========= -->
+            <div class="admin-panel" id="panel-contacts">
+                <div class="content-card glass-card">
+                    <h3 class="section-title">所有留言</h3>
+                    <table class="admin-table">
+                        <thead><tr><th>ID</th><th>称呼</th><th>邮箱</th><th>内容</th><th>IP</th><th>时间</th><th>状态</th><th>操作</th></tr></thead>
+                        <tbody id="contactsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        'use strict';
+
+        // ===== 背景恢复 =====
+        var bgImage = document.getElementById('bgImage');
+        var patternBg = document.querySelector('.pattern-bg');
+        var bgBlurEl = document.getElementById('bgBlurLayer');
+        var BG_DB_NAME = 'homepageBgDB', BG_STORE = 'bgStore', BG_KEY = 'currentBg';
+        function openBgDB(cb) { var r = indexedDB.open(BG_DB_NAME,1); r.onupgradeneeded=function(e){e.target.result.createObjectStore(BG_STORE);}; r.onsuccess=function(e){cb(e.target.result);}; r.onerror=function(){cb(null);}; }
+        function showBlob(b) { var u=URL.createObjectURL(b); bgImage.src=u; bgImage.style.display=''; if(patternBg)patternBg.style.display='none'; }
+        openBgDB(function(db){if(!db)return;var r=db.transaction(BG_STORE,'readonly').objectStore(BG_STORE).get(BG_KEY);r.onsuccess=function(){if(r.result)showBlob(r.result);};});
+        var sB='4',sO='25';try{sB=localStorage.getItem('hp_bgBlur')||'4';sO=localStorage.getItem('hp_bgOpacity')||'25';}catch(e){}
+        if(bgBlurEl){bgBlurEl.style.backdropFilter='blur('+sB+'px)';bgBlurEl.style.webkitBackdropFilter='blur('+sB+'px)';bgBlurEl.style.background='rgba(24,28,33,'+(sO/100)+')';}
+
+        // ===== API 工具 =====
+        function api(path, opts) {
+            opts = opts || {};
+            opts.credentials = 'include';
+            return fetch('/api/v1/' + path, opts).then(function (r) { return r.json(); });
+        }
+        function apiJSON(path, method, data) {
+            return api(path, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        }
+        function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+        var loginView = document.getElementById('loginView');
+        var adminView = document.getElementById('adminView');
+
+        // ===== 登录 =====
+        api('auth').then(function (r) { if (r.data && r.data.logged_in) showAdmin(); });
+
+        document.getElementById('loginBtn').addEventListener('click', doLogin);
+        document.getElementById('loginKey').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
+
+        function doLogin() {
+            var key = document.getElementById('loginKey').value.trim();
+            var errEl = document.getElementById('loginErr');
+            if (!key) return;
+            errEl.style.display = 'none';
+            apiJSON('auth', 'POST', { key: key }).then(function (r) {
+                if (r.success) showAdmin();
+                else { errEl.textContent = r.error || 'Login failed'; errEl.style.display = 'block'; }
+            });
+        }
+
+        function showAdmin() {
+            loginView.style.display = 'none';
+            adminView.style.display = '';
+            loadDashboard();
+            loadProfile();
+            loadPages();
+            loadContacts();
+        }
+
+        document.getElementById('logoutBtn').addEventListener('click', function () {
+            api('auth', { method: 'DELETE' }).then(function () { location.reload(); });
+        });
+
+        // ===== Tab 切换 =====
+        document.getElementById('adminTabs').addEventListener('click', function (e) {
+            var tab = e.target.closest('.admin-tab');
+            if (!tab) return;
+            document.querySelectorAll('.admin-tab').forEach(function (t) { t.classList.remove('active'); });
+            document.querySelectorAll('.admin-panel').forEach(function (p) { p.classList.remove('active'); });
+            tab.classList.add('active');
+            var panel = document.getElementById('panel-' + tab.dataset.panel);
+            if (panel) panel.classList.add('active');
+        });
+
+        // ===== 仪表盘 =====
+        function loadDashboard() {
+            api('monitor').then(function (r) {
+                if (!r.success) return;
+                var d = r.data;
+                document.getElementById('dashGrid').innerHTML =
+                    '<div class="dash-card"><div class="num">' + d.contacts.total + '</div><div class="label">总留言</div></div>' +
+                    '<div class="dash-card"><div class="num" style="color:#ffd93d">' + d.contacts.unread + '</div><div class="label">未读留言</div></div>' +
+                    '<div class="dash-card"><div class="num">' + d.contacts.today + '</div><div class="label">今日留言</div></div>' +
+                    '<div class="dash-card"><div class="num">' + d.projects.total + '</div><div class="label">项目数</div></div>' +
+                    '<div class="dash-card"><div class="num">' + d.pages.total + '</div><div class="label">自定义页面</div></div>' +
+                    '<div class="dash-card"><div class="num" style="font-size:14px">' + esc(d.server_time) + '</div><div class="label">服务器时间 (PHP ' + esc(d.php_version) + ')</div></div>';
+
+                // 趋势图
+                var trend = d.trend || [];
+                var maxC = Math.max.apply(null, trend.map(function (t) { return t.count; }).concat([1]));
+                document.getElementById('trendBar').innerHTML = trend.map(function (t) {
+                    var h = Math.max(4, (t.count / maxC) * 60);
+                    return '<div class="trend-col" style="height:' + h + 'px" title="' + t.date + ': ' + t.count + '"><span class="trend-label">' + t.date.slice(5) + '</span></div>';
+                }).join('') || '<span style="color:var(--text-muted);font-size:13px;">暂无数据</span>';
+
+                // 最近留言
+                document.getElementById('recentTable').querySelector('tbody').innerHTML =
+                    (d.recent_contacts || []).map(function (c) {
+                        var badge = c.is_read ? '<span class="badge badge-green">已读</span>' : '<span class="badge badge-yellow">未读</span>';
+                        return '<tr><td>' + esc(c.name) + '</td><td>' + esc(c.email) + '</td><td>' + esc((c.message||'').substring(0,40)) + '</td><td>' + esc(c.created_at) + '</td><td>' + badge + '</td></tr>';
+                    }).join('') || '<tr><td colspan="5" style="color:var(--text-muted)">暂无留言</td></tr>';
+            });
+        }
+
+        // ===== 个人资料 =====
+        function loadProfile() {
+            api('profile').then(function (r) {
+                if (!r.success) return;
+                var p = r.data;
+                document.getElementById('pf_name').value = p.name || '';
+                document.getElementById('pf_email').value = p.email || '';
+                document.getElementById('pf_wechat').value = p.wechat || '';
+                document.getElementById('pf_bio').value = p.bio || '';
+                document.getElementById('pf_skills').value = Array.isArray(p.skills) ? p.skills.join(', ') : (p.skills || '');
+            });
+            // 刷新头像
+            var av = document.getElementById('avatarPreview');
+            av.src = '/api/v1/avatar?t=' + Date.now();
+            av.style.display = '';
+        }
+
+        document.getElementById('profileSaveBtn').addEventListener('click', function () {
+            var msg = document.getElementById('profileMsg');
+            apiJSON('profile', 'PUT', {
+                name: document.getElementById('pf_name').value,
+                email: document.getElementById('pf_email').value,
+                wechat: document.getElementById('pf_wechat').value,
+                bio: document.getElementById('pf_bio').value,
+                skills: document.getElementById('pf_skills').value,
+            }).then(function (r) {
+                msg.className = r.success ? 'msg-ok' : 'msg-err';
+                msg.textContent = r.success ? '已保存' : (r.error || '失败');
+                setTimeout(function () { msg.textContent = ''; }, 3000);
+            });
+        });
+
+        // 头像上传
+        document.getElementById('avatarBtn').addEventListener('click', function () { document.getElementById('avatarFile').click(); });
+        document.getElementById('avatarFile').addEventListener('change', function () {
+            var file = this.files[0];
+            if (!file) return;
+            var fd = new FormData();
+            fd.append('avatar', file);
+            var msg = document.getElementById('avatarMsg');
+            msg.textContent = '上传中...';
+            fetch('/api/v1/avatar', { method: 'POST', body: fd, credentials: 'include' })
+                .then(function (r) { return r.json(); })
+                .then(function (r) {
+                    if (r.success) {
+                        msg.className = 'msg-ok'; msg.textContent = '上传成功';
+                        document.getElementById('avatarPreview').src = '/api/v1/avatar?t=' + Date.now();
+                    } else { msg.className = 'msg-err'; msg.textContent = r.error; }
+                    setTimeout(function () { msg.textContent = ''; }, 3000);
+                });
+        });
+
+        // ===== 自定义页面 =====
+        var pageEditing = null;
+
+        function loadPages() {
+            api('pages').then(function (r) {
+                if (!r.success) return;
+                var list = r.data || [];
+                document.getElementById('pagesList').innerHTML = list.length ? list.map(function (p) {
+                    return '<div class="page-list-item" data-id="' + p.id + '">' +
+                        '<span class="title">' + esc(p.title) + '</span>' +
+                        '<span class="slug">/' + esc(p.slug) + '</span>' +
+                        '<span class="badge ' + (p.visible ? 'badge-green' : 'badge-red') + '">' + (p.visible ? '可见' : '隐藏') + '</span>' +
+                        '<button class="glass-btn btn-sm" onclick="event.stopPropagation();editPage(' + p.id + ')">编辑</button>' +
+                        '<button class="glass-btn btn-sm btn-danger" onclick="event.stopPropagation();deletePage(' + p.id + ')">删除</button>' +
+                    '</div>';
+                }).join('') : '<div style="color:var(--text-muted);font-size:13px;padding:10px;">暂无自定义页面</div>';
+            });
+        }
+
+        window.editPage = function (id) {
+            api('pages/' + id).then(function (r) {
+                if (!r.success) return;
+                var p = r.data;
+                pageEditing = p.id;
+                document.getElementById('pe_id').value = p.id;
+                document.getElementById('pe_title').value = p.title || '';
+                document.getElementById('pe_slug').value = p.slug || '';
+                document.getElementById('pe_icon').value = p.icon || 'file';
+                document.getElementById('pe_content').value = p.content || '';
+                document.getElementById('pageEditorTitle').textContent = '编辑页面: ' + p.title;
+                document.getElementById('pageEditor').style.display = '';
+            });
+        };
+
+        window.deletePage = function (id) {
+            if (!confirm('确认删除该页面？')) return;
+            api('pages/' + id, { method: 'DELETE' }).then(function (r) {
+                if (r.success) loadPages();
+                else alert(r.error);
+            });
+        };
+
+        document.getElementById('newPageBtn').addEventListener('click', function () {
+            pageEditing = null;
+            document.getElementById('pe_id').value = '';
+            document.getElementById('pe_title').value = '';
+            document.getElementById('pe_slug').value = '';
+            document.getElementById('pe_icon').value = 'file';
+            document.getElementById('pe_content').value = '';
+            document.getElementById('pageEditorTitle').textContent = '新建页面';
+            document.getElementById('pageEditor').style.display = '';
+        });
+
+        document.getElementById('pageCancelBtn').addEventListener('click', function () {
+            document.getElementById('pageEditor').style.display = 'none';
+        });
+
+        document.getElementById('pageSaveBtn').addEventListener('click', function () {
+            var data = {
+                title: document.getElementById('pe_title').value.trim(),
+                slug: document.getElementById('pe_slug').value.trim(),
+                icon: document.getElementById('pe_icon').value.trim(),
+                content: document.getElementById('pe_content').value,
+            };
+            var msg = document.getElementById('pageMsg');
+            var method = pageEditing ? 'PUT' : 'POST';
+            var url = pageEditing ? 'pages/' + pageEditing : 'pages';
+            apiJSON(url, method, data).then(function (r) {
+                msg.className = r.success ? 'msg-ok' : 'msg-err';
+                msg.textContent = r.success ? '已保存' : (r.error || '失败');
+                if (r.success) { loadPages(); document.getElementById('pageEditor').style.display = 'none'; }
+                setTimeout(function () { msg.textContent = ''; }, 3000);
+            });
+        });
+
+        // ===== 留言管理 =====
+        function loadContacts() {
+            api('contact').then(function (r) {
+                if (!r.success || !Array.isArray(r.data)) return;
+                document.getElementById('contactsBody').innerHTML = r.data.map(function (c) {
+                    var badge = c.is_read ? '<span class="badge badge-green">已读</span>' : '<span class="badge badge-yellow">未读</span>';
+                    return '<tr>' +
+                        '<td>' + c.id + '</td>' +
+                        '<td>' + esc(c.name) + '</td>' +
+                        '<td>' + esc(c.email) + '</td>' +
+                        '<td>' + esc((c.message||'').substring(0, 80)) + '</td>' +
+                        '<td style="font-size:11px">' + esc(c.ip) + '</td>' +
+                        '<td style="font-size:11px">' + esc(c.created_at) + '</td>' +
+                        '<td>' + badge + '</td>' +
+                        '<td><button class="glass-btn btn-sm" onclick="markRead(' + c.id + ')">已读</button> <button class="glass-btn btn-sm btn-danger" onclick="delContact(' + c.id + ')">删除</button></td>' +
+                    '</tr>';
+                }).join('') || '<tr><td colspan="8" style="color:var(--text-muted)">暂无留言</td></tr>';
+            });
+        }
+
+        window.markRead = function (id) {
+            api('contact/' + id, { method: 'PUT' }).then(function () { loadContacts(); loadDashboard(); });
+        };
+        window.delContact = function (id) {
+            if (!confirm('确认删除该留言？')) return;
+            api('contact/' + id, { method: 'DELETE' }).then(function () { loadContacts(); loadDashboard(); });
+        };
+
+    })();
+    </script>
+</body>
+</html>

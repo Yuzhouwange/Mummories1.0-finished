@@ -1,0 +1,171 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>用户主页 - Mummories</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 32px 16px; box-sizing: border-box; }
+  .profile-wrap { width: 100%; max-width: 540px; }
+  .profile-avatar-area { display: flex; flex-direction: column; align-items: center; margin-bottom: 20px; }
+  .profile-avatar {
+    width: 100px; height: 100px; border-radius: 50%; overflow: hidden;
+    background: rgba(var(--accent-rgb), 0.08);
+    border: 2px solid rgba(var(--accent-rgb), 0.25);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px; font-weight: 700; color: rgba(255,255,255,0.5); flex-shrink: 0;
+  }
+  .profile-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+  .profile-name { font-size: 22px; font-weight: 700; margin-top: 12px; }
+  .profile-username { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+  .profile-bio { font-size: 14px; color: var(--text-muted); line-height: 1.8; margin: 12px 0 4px; }
+  .profile-section-title { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: 0.8px; margin: 16px 0 8px; }
+  .profile-shortcut-list { display: flex; flex-direction: column; gap: 6px; }
+  .profile-shortcut-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    border-radius: 10px; background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08); color: var(--text-muted);
+    text-decoration: none; font-size: 13px; transition: all 0.2s;
+  }
+  .profile-shortcut-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
+  .profile-article-item {
+    display: block; padding: 10px 14px; border-radius: 10px;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-muted); text-decoration: none; font-size: 13px; transition: all 0.2s;
+  }
+  .profile-article-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
+  .profile-article-item .art-title { font-weight: 600; color: #fff; }
+  .profile-article-item .art-time { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+  .profile-moment-item {
+    padding: 10px 14px; border-radius: 10px;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    font-size: 13px; color: var(--text-muted); line-height: 1.6;
+  }
+  .profile-moment-item .mom-time { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+  .back-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--text-muted); font-size: 13px; text-decoration: none; margin-bottom: 16px; transition: color 0.2s;
+  }
+  .back-link:hover { color: #fff; }
+  .profile-error { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+  .loading-spinner {
+    width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.1);
+    border-top-color: rgba(255,255,255,0.5); border-radius: 50%;
+    animation: spin 0.8s linear infinite; margin: 40px auto;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+<script src="page-bg.js"></script>
+</head>
+<body>
+<div class="profile-wrap">
+  <a class="back-link" href="javascript:history.back()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+    返回
+  </a>
+  <div class="glass-card" id="profileCard">
+    <div class="loading-spinner"></div>
+  </div>
+</div>
+<script>
+(function () {
+  var params = new URLSearchParams(location.search);
+  var userId = params.get('id');
+  var chatId = params.get('chatid');
+  if (!userId && !chatId) { showError('缺少用户ID参数'); return; }
+  var apiUrl = userId
+    ? '/api/v1/public/' + encodeURIComponent(userId)
+    : '/api/v1/public/chat/' + encodeURIComponent(chatId);
+  fetch(apiUrl, { credentials: 'include' })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+      if (!res.success) { showError(res.error || '加载失败'); return; }
+      renderProfile(res.data);
+    })
+    .catch(function () { showError('网络错误，请稍后重试'); });
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function renderProfile(p) {
+    var card = document.getElementById('profileCard');
+    var initials = esc((p.display_name || p.username || '?').charAt(0).toUpperCase());
+    var avatarHtml = '';
+    if (p.avatar && p.avatar !== 'default_avatar.png') {
+      var src = p.avatar.indexOf('/') >= 0 ? p.avatar : '/avatars/' + p.avatar;
+      avatarHtml = '<img src="' + esc(src) + '" alt="avatar" onerror="this.style.display=\'none\';this.parentNode.textContent=\'' + initials + '\'">';
+    } else {
+      avatarHtml = initials;
+    }
+    var skillsHtml = '';
+    if (Array.isArray(p.skills) && p.skills.length) {
+      skillsHtml = '<div class="profile-section-title">技能</div>'
+        + '<div class="skills-grid" style="margin-bottom:4px">'
+        + p.skills.map(function (s) { return '<span class="skill-tag">' + esc(s) + '</span>'; }).join('')
+        + '</div>';
+    }
+    var shortcutsHtml = '';
+    if (Array.isArray(p.shortcuts) && p.shortcuts.length) {
+      shortcutsHtml = '<div class="profile-section-title">快捷入口</div>'
+        + '<div class="profile-shortcut-list">'
+        + p.shortcuts.map(function (s) {
+            var href = s.url ? esc(s.url) : '#';
+            return '<a class="profile-shortcut-item" href="' + href + '" target="_blank" rel="noopener noreferrer">'
+              + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>'
+              + esc(s.title) + '</a>';
+          }).join('') + '</div>';
+    }
+    var articlesHtml = '';
+    if (Array.isArray(p.articles) && p.articles.length) {
+      articlesHtml = '<div class="profile-section-title">文章</div>'
+        + '<div class="profile-shortcut-list">'
+        + p.articles.map(function (a) {
+            return '<a class="profile-article-item" href="articles.html#article-' + a.id + '">'
+              + '<div class="art-title">' + esc(a.title) + '</div>'
+              + '<div class="art-time">' + esc(a.created_at) + '</div></a>';
+          }).join('') + '</div>';
+    }
+    var momentsHtml = '';
+    if (Array.isArray(p.moments) && p.moments.length) {
+      momentsHtml = '<div class="profile-section-title">说说</div>'
+        + '<div class="profile-shortcut-list">'
+        + p.moments.map(function (m) {
+            var text = esc(m.content || '');
+            if (text.length > 100) text = text.substring(0, 100) + '...';
+            return '<a class="profile-moment-item" href="moments.html#moment-' + m.id + '" style="text-decoration:none;color:inherit;display:block">'
+              + '<div>' + text + '</div>'
+              + '<div class="mom-time">' + esc(m.created_at) + '</div></a>';
+          }).join('') + '</div>';
+    }
+    document.title = esc(p.display_name || p.username) + ' - Mummories';
+    card.innerHTML = '<div class="profile-avatar-area">'
+      + '<div class="profile-avatar">' + avatarHtml + '</div>'
+      + '<div class="profile-name">' + esc(p.display_name || p.username) + '</div>'
+      + (p.display_name ? '<div class="profile-username">@' + esc(p.username) + '</div>' : '')
+      + '</div>'
+      + (p.bio ? '<div class="profile-bio">' + esc(p.bio) + '</div>' : '')
+      + skillsHtml + shortcutsHtml + articlesHtml + momentsHtml
+      + '<div class="profile-section-title" style="margin-top:16px">作品展示</div>'
+      + '<div class="profile-shortcut-list">'
+      + '<a class="profile-shortcut-item" href="ui.html" target="_blank" rel="noopener noreferrer">'
+      + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>'
+      + 'UI 组件库</a>'
+      + '<a class="profile-shortcut-item" href="creative.html" target="_blank" rel="noopener noreferrer">'
+      + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'
+      + '创意作品</a>'
+      + '</div>';
+  }
+
+  function showError(msg) {
+    document.getElementById('profileCard').innerHTML = '<div class="profile-error">'
+      + '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 12px;display:block;opacity:0.35"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+      + '<p style="font-size:14px">' + esc(msg) + '</p>'
+      + '<a href="/" style="color:var(--text-muted);font-size:13px;margin-top:12px;display:inline-block">返回首页</a></div>';
+  }
+}());
+</script>
+</body>
+</html>

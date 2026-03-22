@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>说说 - Mummories</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="page-bg.js"></script>
+    <style>
+        body { overflow: auto; }
+        .page-wrap { position: relative; z-index: 2; max-width: 800px; margin: 0 auto; padding: 20px 24px; min-height: 100vh; }
+        .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+        .page-header h1 { font-size: 22px; font-weight: 700; flex: 1; }
+        .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); text-decoration: none; font-size: 13px; padding: 6px 14px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); transition: all 0.25s; }
+        .back-link:hover { color: #fff; background: rgba(255,255,255,0.12); }
+
+        /* 发布说说 */
+        .post-box { border-radius: 14px; background: var(--card-bg); border: 1px solid var(--card-border); padding: 20px; margin-bottom: 24px; display: none; }
+        .post-box.show { display: block; }
+        .post-box textarea { width: 100%; min-height: 80px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.2); color: var(--text); font-size: 14px; font-family: inherit; outline: none; resize: vertical; box-sizing: border-box; }
+        .post-box textarea:focus { border-color: rgba(255,255,255,0.25); }
+        .post-bar { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+        .post-bar .imgs-hint { font-size: 12px; color: var(--text-muted); flex: 1; }
+        .btn-primary { padding: 6px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; border: 1px solid rgba(100,180,255,0.3); background: rgba(100,180,255,0.15); color: #7ec8ff; transition: all 0.2s; font-weight: 600; }
+        .btn-primary:hover { background: rgba(100,180,255,0.25); color: #fff; }
+
+        /* 说说列表 */
+        .moment-list { display: flex; flex-direction: column; gap: 16px; }
+        .moment-card { border-radius: 14px; background: var(--card-bg); border: 1px solid var(--card-border); padding: 20px; transition: all 0.25s; }
+        .moment-card:hover { background: var(--card-bg-hover); border-color: var(--card-border-hover); }
+        .moment-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .moment-avatar { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.1); overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        .moment-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .moment-info { flex: 1; }
+        .moment-name { font-size: 14px; font-weight: 600; }
+        .moment-time { font-size: 11px; color: var(--text-muted); }
+        .moment-top { display: inline-block; background: rgba(255,180,0,0.2); color: #ffb400; font-size: 10px; padding: 1px 6px; border-radius: 3px; margin-left: 8px; }
+        .moment-content { font-size: 15px; line-height: 1.7; margin-bottom: 12px; white-space: pre-wrap; word-break: break-word; }
+        .moment-images { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
+        .moment-images.single { grid-template-columns: 1fr; max-width: 400px; }
+        .moment-images.double { grid-template-columns: repeat(2, 1fr); max-width: 400px; }
+        .moment-img { aspect-ratio: 1; border-radius: 8px; overflow: hidden; cursor: pointer; background: rgba(0,0,0,0.3); }
+        .moment-img img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }
+        .moment-img:hover img { transform: scale(1.05); }
+        .moment-footer { display: flex; align-items: center; gap: 16px; font-size: 13px; color: var(--text-muted); }
+        .moment-footer button { display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-muted); background: none; border: none; cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: all 0.2s; }
+        .moment-footer button:hover { color: #fff; background: rgba(255,255,255,0.06); }
+        .moment-footer button.liked { color: #ff6b9d; }
+        .moment-footer button svg { width: 16px; height: 16px; }
+
+        /* 说说评论区 */
+        .moment-comments { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.05); display: none; }
+        .moment-comments.show { display: block; }
+        .mc-form { display: flex; gap: 8px; margin-bottom: 12px; }
+        .mc-form input { flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.2); color: var(--text); font-size: 13px; outline: none; }
+        .mc-form button { padding: 6px 14px; border-radius: 6px; border: 1px solid rgba(100,180,255,0.3); background: rgba(100,180,255,0.12); color: #7ec8ff; cursor: pointer; font-size: 12px; white-space: nowrap; }
+        .mc-item { padding: 8px 0; font-size: 13px; line-height: 1.5; }
+        .mc-item .name { font-weight: 600; margin-right: 6px; }
+        .mc-item .time { font-size: 11px; color: var(--text-muted); float: right; }
+
+        /* 图片预览弹窗 */
+        .img-viewer { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 200; display: none; align-items: center; justify-content: center; cursor: zoom-out; }
+        .img-viewer.show { display: flex; }
+        .img-viewer img { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
+
+        /* 分页 */
+        .pagination { display: flex; justify-content: center; gap: 6px; margin-top: 24px; }
+        .page-btn { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--card-border); background: var(--card-bg); color: var(--text-muted); cursor: pointer; font-size: 13px; transition: all 0.2s; }
+        .page-btn:hover { color: #fff; background: var(--card-bg-hover); }
+        .page-btn.active { background: rgba(255,255,255,0.12); color: #fff; }
+        .page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+        .empty-state p { font-size: 14px; }
+
+        @media (max-width: 600px) {
+            .page-wrap { padding: 14px; }
+            .moment-images { grid-template-columns: repeat(3, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg" id="bgLayer">
+        <img class="bg-image" id="bgImage" alt="" style="display:none">
+        <div class="pattern-bg">
+            <svg class="cube-svg" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
+                <defs><pattern id="cube" x="0" y="0" width="60" height="52" patternUnits="userSpaceOnUse"><path d="M30 0 L60 15 L60 41 L30 52 L0 41 L0 15 Z" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/><path d="M30 26 L60 15 M30 26 L0 15 M30 26 L30 52" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="0.5"/></pattern></defs>
+                <rect width="100%" height="100%" fill="url(#cube)"/>
+            </svg>
+        </div>
+    </div>
+    <div class="bg-blur" id="bgBlurLayer"></div>
+
+    <div class="page-wrap">
+        <div class="page-header">
+            <a class="back-link" href="index.html">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                返回主页
+            </a>
+            <h1>💭 说说</h1>
+            <button class="btn-primary" id="btnPost" style="display:none" onclick="togglePostBox()">✏️ 发说说</button>
+        </div>
+
+        <!-- 发布框 -->
+        <div class="post-box" id="postBox">
+            <textarea id="postContent" placeholder="此刻的想法..."></textarea>
+            <div class="post-bar">
+                <input id="postImages" class="imgs-hint" placeholder="图片URL (逗号分隔多张)" style="flex:1;padding:6px 10px;border-radius:6px;border:1px solid var(--card-border);background:rgba(0,0,0,0.2);color:var(--text);font-size:12px;outline:none;">
+                <button class="btn-primary" onclick="publishMoment()">发布</button>
+            </div>
+        </div>
+
+        <div class="moment-list" id="momentList"></div>
+        <div class="pagination" id="pagination"></div>
+    </div>
+
+    <!-- 图片预览 -->
+    <div class="img-viewer" id="imgViewer" onclick="this.classList.remove('show')">
+        <img id="viewerImg" src="">
+    </div>
+
+    <script>
+    (function() {
+        var isAdmin = false, userId = null, currentPage = 1;
+
+        function api(path, opts) {
+            opts = opts || {};
+            opts.credentials = 'include';
+            return fetch('/api/v1/' + path, opts).then(function(r) { return r.json(); });
+        }
+
+        api('auth').then(function(r) {
+            if (r.success) {
+                isAdmin = r.data.is_admin;
+                userId = r.data.user_id;
+                if (isAdmin || userId) document.getElementById('btnPost').style.display = '';
+            }
+        }).then(function() {
+            loadMoments();
+            // 支持通过 hash 滚动到指定说说
+            var hash = window.location.hash;
+            if (hash && hash.startsWith('#moment-')) {
+                var waitEl = setInterval(function() {
+                    var el = document.getElementById(hash.substring(1));
+                    if (el) { clearInterval(waitEl); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.style.boxShadow = '0 0 0 2px rgba(99,102,241,0.5)'; }
+                }, 200);
+                setTimeout(function() { clearInterval(waitEl); }, 5000);
+            }
+        });
+
+        function loadMoments() {
+            api('moments?page=' + currentPage + '&size=10').then(function(r) {
+                if (!r.success) return;
+                renderList(r.data.list);
+                renderPagination(r.data.total, r.data.page, r.data.size);
+            });
+        }
+
+        function renderList(list) {
+            var box = document.getElementById('momentList');
+            if (!list || !list.length) {
+                box.innerHTML = '<div class="empty-state"><p>暂无说说</p></div>';
+                return;
+            }
+            var html = '';
+            list.forEach(function(m) {
+                html += '<div class="moment-card" id="moment-'+m.id+'">';
+                html += '<div class="moment-head">';
+                if (m.avatar) html += '<div class="moment-avatar"><img src="'+esc(m.avatar)+'"></div>';
+                else html += '<div class="moment-avatar">👤</div>';
+                html += '<div class="moment-info"><div class="moment-name">'+esc(m.display_name||m.username||'匿名');
+                if (m.is_top) html += '<span class="moment-top">置顶</span>';
+                html += '</div><div class="moment-time">'+fmtDate(m.created_at)+'</div></div>';
+                var canEditM = isAdmin || (userId && m.user_id && parseInt(m.user_id) === parseInt(userId));
+                if (canEditM) html += '<button style="font-size:11px;color:var(--text-muted);background:none;border:none;cursor:pointer" onclick="editMoment('+m.id+')">编辑</button> <button style="font-size:11px;color:var(--text-muted);background:none;border:none;cursor:pointer" onclick="deleteMoment('+m.id+')">删除</button>';
+                html += '</div>';
+                html += '<div class="moment-content">'+esc(m.content)+'</div>';
+                if (m.images && m.images.length) {
+                    var cls = m.images.length === 1 ? 'single' : (m.images.length === 2 ? 'double' : '');
+                    html += '<div class="moment-images '+cls+'">';
+                    m.images.forEach(function(img) {
+                        html += '<div class="moment-img" onclick="viewImg(\''+esc(img)+'\')"><img src="'+esc(img)+'" loading="lazy"></div>';
+                    });
+                    html += '</div>';
+                }
+                html += '<div class="moment-footer">';
+                html += '<button id="like-btn-'+m.id+'" onclick="toggleLike('+m.id+')">';
+                html += '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>';
+                html += '<span id="like-cnt-'+m.id+'">'+m.like_count+'</span></button>';
+                html += '<button onclick="toggleComments('+m.id+')">';
+                html += '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>';
+                html += '<span>'+m.comment_count+'</span></button>';
+                html += '</div>';
+                html += '<div class="moment-comments" id="comments-'+m.id+'">';
+                html += '<div class="mc-form"><input id="ci-'+m.id+'" placeholder="写评论..."><button onclick="postComment('+m.id+')">发送</button></div>';
+                html += '<div id="cl-'+m.id+'"></div>';
+                html += '</div>';
+                html += '</div>';
+            });
+            box.innerHTML = html;
+            // 检查点赞状态
+            if (userId) {
+                list.forEach(function(m) {
+                    api('likes?target_type=moment&target_id=' + m.id).then(function(r) {
+                        if (r.success && r.data.liked) {
+                            document.getElementById('like-btn-' + m.id).classList.add('liked');
+                        }
+                    });
+                });
+            }
+        }
+
+        function renderPagination(total, page, size) {
+            var box = document.getElementById('pagination');
+            var pages = Math.ceil(total / size);
+            if (pages <= 1) { box.innerHTML = ''; return; }
+            var html = '<button class="page-btn" onclick="goPage('+(page-1)+')" '+(page<=1?'disabled':'')+'>‹</button>';
+            for (var i = 1; i <= pages; i++) {
+                if (pages > 7 && Math.abs(i - page) > 2 && i !== 1 && i !== pages) {
+                    if (i === 2 || i === pages - 1) html += '<span style="color:var(--text-muted);padding:0 4px">...</span>';
+                    continue;
+                }
+                html += '<button class="page-btn'+(i===page?' active':'')+'" onclick="goPage('+i+')">'+i+'</button>';
+            }
+            html += '<button class="page-btn" onclick="goPage('+(page+1)+')" '+(page>=pages?'disabled':'')+'>›</button>';
+            box.innerHTML = html;
+        }
+
+        window.goPage = function(p) { currentPage = p; loadMoments(); window.scrollTo(0, 0); };
+
+        window.togglePostBox = function() {
+            document.getElementById('postBox').classList.toggle('show');
+        };
+
+        window.publishMoment = function() {
+            var content = document.getElementById('postContent').value.trim();
+            if (!content) return alert('请输入内容');
+            var images = document.getElementById('postImages').value.trim();
+            api('moments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: content, images: images })
+            }).then(function(r) {
+                if (r.success) {
+                    document.getElementById('postContent').value = '';
+                    document.getElementById('postImages').value = '';
+                    document.getElementById('postBox').classList.remove('show');
+                    currentPage = 1;
+                    loadMoments();
+                } else alert(r.message);
+            });
+        };
+
+        window.toggleLike = function(mid) {
+            if (!userId) return alert('请先登录后点赞');
+            api('likes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target_type: 'moment', target_id: mid })
+            }).then(function(r) {
+                if (r.success) {
+                    var btn = document.getElementById('like-btn-' + mid);
+                    btn.classList.toggle('liked', r.data.liked);
+                    var cnt = parseInt(document.getElementById('like-cnt-' + mid).textContent) || 0;
+                    document.getElementById('like-cnt-' + mid).textContent = cnt + (r.data.liked ? 1 : -1);
+                }
+            });
+        };
+
+        window.toggleComments = function(mid) {
+            var box = document.getElementById('comments-' + mid);
+            if (box.classList.contains('show')) {
+                box.classList.remove('show');
+                return;
+            }
+            box.classList.add('show');
+            loadComments(mid);
+        };
+
+        function loadComments(mid) {
+            api('comments?target_type=moment&target_id=' + mid).then(function(r) {
+                if (!r.success) return;
+                var list = r.data || [];
+                var cl = document.getElementById('cl-' + mid);
+                if (!list.length) { cl.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:12px;padding:8px">暂无评论</div>'; return; }
+                var html = '';
+                list.forEach(function(c) {
+                    html += '<div class="mc-item"><span class="name">' + esc(c.nickname||c.display_name||'匿名') + '</span>' + esc(c.content) + '<span class="time">' + fmtDate(c.created_at) + '</span></div>';
+                    if (c.children) c.children.forEach(function(ch) {
+                        html += '<div class="mc-item" style="padding-left:20px"><span class="name">' + esc(ch.nickname||ch.display_name||'匿名') + '</span>' + esc(ch.content) + '<span class="time">' + fmtDate(ch.created_at) + '</span></div>';
+                    });
+                });
+                cl.innerHTML = html;
+            });
+        }
+
+        window.postComment = function(mid) {
+            if (!userId) return alert('请先登录后再评论');
+            var input = document.getElementById('ci-' + mid);
+            var content = input.value.trim();
+            if (!content) return;
+            api('comments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target_type: 'moment', target_id: mid, content: content })
+            }).then(function(r) {
+                if (r.success) { input.value = ''; loadComments(mid); }
+                else alert(r.message);
+            });
+        };
+
+        window.deleteMoment = function(mid) {
+            if (!confirm('确定删除这条说说？')) return;
+            api('moments/' + mid, { method: 'DELETE' }).then(function(r) {
+                if (r.success) loadMoments();
+                else alert(r.error || r.message || '删除失败');
+            });
+        };
+
+        window.editMoment = function(mid) {
+            var card = document.getElementById('moment-' + mid);
+            if (!card) return;
+            var contentEl = card.querySelector('.moment-content');
+            if (!contentEl) return;
+            var oldText = contentEl.textContent;
+            var newText = prompt('编辑说说内容：', oldText);
+            if (newText === null || newText.trim() === '') return;
+            api('moments/' + mid, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: newText.trim() })
+            }).then(function(r) {
+                if (r.success) loadMoments();
+                else alert(r.error || r.message || '编辑失败');
+            });
+        };
+
+        window.viewImg = function(src) {
+            document.getElementById('viewerImg').src = src;
+            document.getElementById('imgViewer').classList.add('show');
+        };
+
+        function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+        function fmtDate(s) {
+            if (!s) return '';
+            var d = new Date(s);
+            var diff = (new Date() - d) / 1000;
+            if (diff < 60) return '刚刚';
+            if (diff < 3600) return Math.floor(diff/60) + '分钟前';
+            if (diff < 86400) return Math.floor(diff/3600) + '小时前';
+            if (diff < 86400 * 30) return Math.floor(diff/86400) + '天前';
+            return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+        }
+    })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聊天室 - 我的主页</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { overflow: hidden; margin: 0; height: 100vh; }
+
+        /* ===== 聊天室页面布局（复用主页 layout 结构） ===== */
+        .chat-layout {
+            position: relative; z-index: 2;
+            display: flex; flex-direction: column;
+            height: 100vh;
+        }
+
+        /* 顶栏 - 与主页 header 完全一致 */
+        .chat-header {
+            height: var(--header-h);
+            display: flex; align-items: center;
+            padding: 0 20px;
+            background: rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(16px) saturate(120%);
+            -webkit-backdrop-filter: blur(16px) saturate(120%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            flex-shrink: 0;
+            z-index: 10;
+        }
+        .chat-header-logo {
+            font-size: 18px; font-weight: 700;
+            color: #fff; margin-right: 24px;
+            white-space: nowrap;
+        }
+        .chat-tab-bar {
+            display: flex; gap: 2px;
+            flex: 1; overflow-x: auto; overflow-y: hidden;
+            margin-right: 16px;
+            scrollbar-width: none;
+        }
+        .chat-tab-bar::-webkit-scrollbar { display: none; }
+        .chat-tab-item {
+            display: flex; align-items: center; gap: 4px;
+            padding: 6px 16px; border-radius: 8px 8px 0 0;
+            color: var(--text-muted); font-size: 13px;
+            cursor: pointer; white-space: nowrap;
+            transition: all 0.25s; position: relative;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            border-bottom: none;
+            text-decoration: none;
+        }
+        .chat-tab-item:hover {
+            color: #fff;
+            background: rgba(255,255,255,0.06);
+        }
+        .chat-tab-item.active {
+            color: #fff;
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.12);
+        }
+        .chat-tab-item.active::after {
+            content: ""; position: absolute;
+            bottom: -1px; left: 0; right: 0; height: 2px;
+            background: rgba(255,255,255,0.8);
+            border-radius: 2px 2px 0 0;
+        }
+
+        /* 主体区域 */
+        .chat-body {
+            flex: 1; display: flex;
+            overflow: hidden;
+            padding: 16px;
+            gap: 16px;
+        }
+
+        /* 左侧信息面板 */
+        .chat-sidebar {
+            width: 260px; flex-shrink: 0;
+            display: flex; flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+        }
+        .chat-info-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(var(--glass-blur)) saturate(120%);
+            -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(120%);
+            border-radius: 16px;
+            border: 1px solid var(--card-border);
+            padding: 20px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05);
+            position: relative; overflow: clip;
+        }
+        .chat-info-card::before {
+            content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb), 0.4), transparent);
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .chat-info-card:hover::before { opacity: 1; }
+        .chat-info-card:hover {
+            background: var(--card-bg-hover);
+            border-color: var(--card-border-hover);
+        }
+        .chat-info-title {
+            font-size: 14px; font-weight: 600; margin-bottom: 12px;
+            color: rgba(255,255,255,0.9);
+            display: flex; align-items: center; gap: 8px;
+        }
+        .chat-info-title svg {
+            width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.5; fill: none;
+        }
+        .chat-status-dot {
+            display: inline-block; width: 8px; height: 8px;
+            border-radius: 50%; background: #4ade80;
+            box-shadow: 0 0 8px rgba(74, 222, 128, 0.5);
+            animation: statusPulse 2s ease-in-out infinite;
+        }
+        @keyframes statusPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .chat-stat-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 0; font-size: 13px;
+            color: var(--text-muted);
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .chat-stat-row:last-child { border-bottom: none; }
+        .chat-stat-val { color: #fff; font-weight: 500; }
+        .chat-quick-actions {
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .chat-quick-actions .glass-btn {
+            width: 100%; justify-content: center;
+        }
+
+        /* 右侧 iframe 容器 */
+        .chat-main {
+            flex: 1;
+            display: flex; flex-direction: column;
+            background: var(--card-bg);
+            backdrop-filter: blur(var(--glass-blur)) saturate(120%);
+            -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(120%);
+            border-radius: 16px;
+            border: 1px solid var(--card-border);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05);
+            overflow: hidden;
+            position: relative;
+        }
+        .chat-main::before {
+            content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb), 0.4), transparent);
+            z-index: 1;
+        }
+        .chat-main-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 20px;
+            background: rgba(255,255,255,0.03);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            flex-shrink: 0;
+        }
+        .chat-main-title {
+            font-size: 15px; font-weight: 600; color: #fff;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .chat-main-title svg {
+            width: 18px; height: 18px; stroke: currentColor; stroke-width: 1.5; fill: none;
+        }
+        .chat-iframe-area {
+            flex: 1; position: relative;
+        }
+        .chat-iframe-area iframe {
+            width: 100%; height: 100%; border: none;
+            background: transparent;
+        }
+
+        /* 浮动背景设置 */
+        .bg-fab {
+            position: fixed; bottom: 24px; left: 24px; z-index: 100;
+            width: 40px; height: 40px; border-radius: 50%;
+            border: 1.5px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(12px); color: #fff;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: all 0.3s; opacity: 0.6;
+        }
+        .bg-fab:hover { opacity: 1; background: rgba(255,255,255,0.15); }
+        .bg-panel {
+            position: fixed; bottom: 72px; left: 24px; z-index: 100;
+            width: 240px; padding: 16px;
+            background: rgba(30,34,40,0.85); backdrop-filter: blur(16px);
+            border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            display: none;
+        }
+        .bg-panel.show { display: block; }
+
+        /* ===== 响应式 ===== */
+        @media (max-width: 768px) {
+            .chat-sidebar { display: none; }
+            .chat-body { padding: 8px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- 背景层 -->
+    <div class="bg" id="bgLayer">
+        <img class="bg-image" id="bgImage" alt="" style="display:none">
+        <div class="pattern-bg">
+            <svg class="cube-svg" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <pattern id="cube" x="0" y="0" width="60" height="52" patternUnits="userSpaceOnUse">
+                        <path d="M30 0 L60 15 L60 41 L30 52 L0 41 L0 15 Z" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/>
+                        <path d="M30 26 L60 15 M30 26 L0 15 M30 26 L30 52" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="0.5"/>
+                    </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#cube)"/>
+            </svg>
+        </div>
+    </div>
+    <div class="bg-blur" id="bgBlurLayer"></div>
+
+    <!-- 页面主体 -->
+    <div class="chat-layout">
+        <!-- 顶栏 -->
+        <header class="chat-header">
+            <div class="chat-header-logo">我的主页</div>
+            <div class="chat-tab-bar">
+                <a class="chat-tab-item" href="index.html">
+                    <span>首页</span>
+                </a>
+                <a class="chat-tab-item" href="projects.html">
+                    <span>项目管理</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                </a>
+                <div class="chat-tab-item active">
+                    <span>聊天室</span>
+                </div>
+            </div>
+            <div class="header-right" style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+                <button class="glass-btn btn-sm" id="bgChangeBtn" title="换一张背景">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                    换一张美图
+                </button>
+                <button class="glass-btn btn-sm" id="bgSaveBtn" title="保存当前背景">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    保存原图
+                </button>
+            </div>
+        </header>
+
+        <!-- 内容区域 -->
+        <div class="chat-body">
+            <!-- 左侧信息面板 -->
+            <div class="chat-sidebar">
+                <div class="chat-info-card">
+                    <div class="chat-info-title">
+                        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        聊天室状态
+                    </div>
+                    <div class="chat-stat-row">
+                        <span>服务状态</span>
+                        <span class="chat-stat-val"><span class="chat-status-dot"></span> 在线</span>
+                    </div>
+                    <div class="chat-stat-row">
+                        <span>聊天系统</span>
+                        <span class="chat-stat-val">Mummories</span>
+                    </div>
+                    <div class="chat-stat-row">
+                        <span>版本</span>
+                        <span class="chat-stat-val">V1.0</span>
+                    </div>
+                </div>
+
+                <div class="chat-info-card">
+                    <div class="chat-info-title">
+                        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                        使用说明
+                    </div>
+                    <div style="font-size:12px; color:var(--text-muted); line-height:1.8;">
+                        <p>1. 首次使用请先<a href="blog-auth.html?tab=register&from=chatroom.html" style="color:#6bcb77">注册博客账号</a></p>
+                        <p>2. 支持添加好友和群聊</p>
+                        <p>3. 可发送文件和图片</p>
+                        <p>4. 支持消息撤回功能</p>
+                    </div>
+                </div>
+
+                <div class="chat-info-card">
+                    <div class="chat-info-title">
+                        <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        快捷操作
+                    </div>
+                    <div class="chat-quick-actions">
+                        <a href="blog-auth.html?from=chatroom.html" class="glass-btn btn-sm btn-primary" style="text-decoration:none;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                            登录
+                        </a>
+                        <a href="blog-auth.html?tab=register&from=chatroom.html" class="glass-btn btn-sm" style="text-decoration:none;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                            注册新账号
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧聊天窗口 -->
+            <div class="chat-main">
+                <div class="chat-main-header">
+                    <div class="chat-main-title">
+                        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        Mummories
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                        <a href="//" id="chatNewWindow" target="_blank" class="glass-btn btn-sm" style="text-decoration:none;font-size:11px;padding:4px 12px;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                            新窗口打开
+                        </a>
+                        <button class="glass-btn btn-sm" onclick="document.getElementById('chatFrame').src=document.getElementById('chatFrame').src;" style="font-size:11px;padding:4px 12px;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                            刷新
+                        </button>
+                    </div>
+                </div>
+                <div class="chat-iframe-area">
+                    <iframe id="chatFrame" src="about:blank" allow="microphone; camera; clipboard-write"></iframe>
+                    <script>
+                    (function(){
+                        // 聊天室运行在 modern-chat 服务上，自动检测端口
+                        var chatPort = 8088;
+                        var chatUrl = location.protocol + '//' + location.hostname + ':' + chatPort + '/chat.php';
+                        var frame = document.getElementById('chatFrame');
+                        var link = document.getElementById('chatNewWindow');
+                        // 尝试加载聊天室
+                        frame.src = chatUrl;
+                        link.href = chatUrl;
+                        frame.onerror = function() {
+                            frame.parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:14px;">聊天室服务未启动，请先运行 modern-chat 项目 (端口 ' + chatPort + ')</div>';
+                        };
+                    })();
+                    </script>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 背景设置浮动面板 -->
+    <button class="bg-fab" id="bgFab" title="背景设置">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
+    <div class="bg-panel" id="bgPanel">
+        <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:#fff;">背景设置</div>
+        <label style="font-size:12px;color:var(--text-muted);">模糊度: <span id="blurVal">4</span>px</label>
+        <input type="range" class="glass-range" id="bgBlurRange" min="0" max="30" value="4" style="width:100%;margin:6px 0 12px;">
+        <label style="font-size:12px;color:var(--text-muted);">遮罩透明度: <span id="opacityVal">25</span>%</label>
+        <input type="range" class="glass-range" id="bgOpacityRange" min="0" max="100" value="25" style="width:100%;margin:6px 0 0;">
+    </div>
+
+    <script>
+    (function () {
+        'use strict';
+        var bgImage = document.getElementById('bgImage');
+        var patternBg = document.querySelector('.pattern-bg');
+        var bgBlurEl = document.getElementById('bgBlurLayer');
+        var BG_DB_NAME = 'homepageBgDB';
+        var BG_STORE = 'bgStore';
+        var BG_KEY = 'currentBg';
+        var _blobUrl = null;
+
+        /* IndexedDB 操作 */
+        function openBgDB(cb) {
+            var req = indexedDB.open(BG_DB_NAME, 1);
+            req.onupgradeneeded = function (e) { e.target.result.createObjectStore(BG_STORE); };
+            req.onsuccess = function (e) { cb(e.target.result); };
+            req.onerror = function () { cb(null); };
+        }
+        function saveBgBlob(blob, cb) {
+            openBgDB(function (db) {
+                if (!db) return cb && cb();
+                var tx = db.transaction(BG_STORE, 'readwrite');
+                tx.objectStore(BG_STORE).put(blob, BG_KEY);
+                tx.oncomplete = function () { cb && cb(); };
+            });
+        }
+        function loadBgBlob(cb) {
+            openBgDB(function (db) {
+                if (!db) return cb(null);
+                var tx = db.transaction(BG_STORE, 'readonly');
+                var r = tx.objectStore(BG_STORE).get(BG_KEY);
+                r.onsuccess = function () { cb(r.result || null); };
+                r.onerror = function () { cb(null); };
+            });
+        }
+        function showBlob(blob) {
+            if (_blobUrl) URL.revokeObjectURL(_blobUrl);
+            _blobUrl = URL.createObjectURL(blob);
+            bgImage.src = _blobUrl;
+            bgImage.style.display = '';
+            if (patternBg) patternBg.style.display = 'none';
+        }
+
+        /* 加载缓存的背景 */
+        function loadBg() {
+            if (!bgImage) return;
+            loadBgBlob(function (blob) { if (blob) showBlob(blob); });
+        }
+        loadBg();
+
+        /* 背景模糊层 */
+        var savedBlur = '4', savedOpacity = '25';
+        try { savedBlur = localStorage.getItem('hp_bgBlur') || '4'; savedOpacity = localStorage.getItem('hp_bgOpacity') || '25'; } catch(e) {}
+        if (bgBlurEl) {
+            bgBlurEl.style.backdropFilter = 'blur(' + savedBlur + 'px)';
+            bgBlurEl.style.webkitBackdropFilter = 'blur(' + savedBlur + 'px)';
+            bgBlurEl.style.background = 'rgba(24, 28, 33, ' + (savedOpacity / 100) + ')';
+        }
+
+        /* 浮动面板交互 */
+        var bgFab = document.getElementById('bgFab');
+        var bgPanel = document.getElementById('bgPanel');
+        var blurRange = document.getElementById('bgBlurRange');
+        var opacityRange = document.getElementById('bgOpacityRange');
+        var blurVal = document.getElementById('blurVal');
+        var opacityVal = document.getElementById('opacityVal');
+
+        if (blurRange) { blurRange.value = savedBlur; blurVal.textContent = savedBlur; }
+        if (opacityRange) { opacityRange.value = savedOpacity; opacityVal.textContent = savedOpacity; }
+
+        if (bgFab) bgFab.addEventListener('click', function () { bgPanel.classList.toggle('show'); });
+        document.addEventListener('click', function (e) {
+            if (bgPanel && !bgPanel.contains(e.target) && e.target !== bgFab && !bgFab.contains(e.target)) bgPanel.classList.remove('show');
+        });
+
+        if (blurRange) blurRange.addEventListener('input', function () {
+            blurVal.textContent = this.value;
+            if (bgBlurEl) {
+                bgBlurEl.style.backdropFilter = 'blur(' + this.value + 'px)';
+                bgBlurEl.style.webkitBackdropFilter = 'blur(' + this.value + 'px)';
+            }
+            try { localStorage.setItem('hp_bgBlur', this.value); } catch(e) {}
+        });
+        if (opacityRange) opacityRange.addEventListener('input', function () {
+            opacityVal.textContent = this.value;
+            if (bgBlurEl) bgBlurEl.style.background = 'rgba(24, 28, 33, ' + (this.value / 100) + ')';
+            try { localStorage.setItem('hp_bgOpacity', this.value); } catch(e) {}
+        });
+
+        /* 随机背景 API */
+        var BG_APIS = [
+            'https://t.mwm.moe/pc/',
+            'https://www.loliapi.com/acg/pc/',
+            'https://api.yimian.xyz/img?type=moe&size=1920x1080'
+        ];
+        var MAX_RETRY = 10;
+
+        function fetchBgFromApi(cb, attempt) {
+            attempt = attempt || 0;
+            if (attempt >= MAX_RETRY) return cb && cb(null);
+            var url = BG_APIS[attempt % BG_APIS.length] + '?_t=' + Date.now() + '_' + attempt;
+            var img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = function () {
+                if (img.naturalWidth < img.naturalHeight * 1.5) {
+                    return fetchBgFromApi(cb, attempt + 1);
+                }
+                var c = document.createElement('canvas');
+                c.width = img.naturalWidth; c.height = img.naturalHeight;
+                c.getContext('2d').drawImage(img, 0, 0);
+                c.toBlob(function (blob) { cb && cb(blob); }, 'image/jpeg', 0.92);
+            };
+            img.onerror = function () { fetchBgFromApi(cb, attempt + 1); };
+            img.src = url;
+        }
+
+        /* 换一张背景 */
+        var bgChangeBtn = document.getElementById('bgChangeBtn');
+        if (bgChangeBtn) {
+            bgChangeBtn.addEventListener('click', function () {
+                bgChangeBtn.disabled = true;
+                bgChangeBtn.querySelector('span') || (bgChangeBtn.textContent = '加载中…');
+                fetchBgFromApi(function (blob) {
+                    bgChangeBtn.disabled = false;
+                    bgChangeBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg> 换一张美图';
+                    if (blob) {
+                        showBlob(blob);
+                        saveBgBlob(blob);
+                    }
+                });
+            });
+        }
+
+        /* 保存原图 */
+        var bgSaveBtn = document.getElementById('bgSaveBtn');
+        if (bgSaveBtn) {
+            bgSaveBtn.addEventListener('click', function () {
+                loadBgBlob(function (blob) {
+                    if (!blob) return alert('暂无背景图片');
+                    var a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = 'wallpaper_' + Date.now() + '.jpg';
+                    a.click();
+                    setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+                });
+            });
+        }
+    })();
+    </script>
+</body>
+</html>

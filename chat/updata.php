@@ -1,0 +1,1384 @@
+<?php
+require_once 'security_check.php';
+require_once 'config.php';
+require_once 'db.php';
+require_once 'User.php';
+
+// 获取 GitHub 仓库文件列表的递归函数
+function getGithubFiles($apiUrl, $repo, $branch, $path = '', $excludeDirs = ['vendor', 'node_modules', '.git', 'uploads', 'avatars', 'new_music', 'new_year_pic', 'keys']) {
+    $files = [];
+    
+    $url = $apiUrl;
+    if (!empty($path)) {
+        $url .= '?path=' . $path;
+    }
+    
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'GET',
+            'header' => "User-Agent: Modern-Chat-Update\r\n"
+        ]
+    ]);
+    
+    $response = @file_get_contents($url, false, $context);
+    
+    if ($response === false) {
+        return $files;
+    }
+    
+    $contents = json_decode($response, true);
+    
+    if (!is_array($contents)) {
+        return $files;
+    }
+    
+    foreach ($contents as $item) {
+        if ($item['type'] === 'file') {
+            // 排除特定文件
+            $fileName = $item['name'];
+            if (!in_array($fileName, ['.env', 'config.json']) && 
+                !preg_match('/\.(sql|md|txt|json|xml|yml|yaml|gitignore|htaccess|dockerignore)$/i', $fileName)) {
+                $filePath = !empty($path) ? $path . '/' . $item['name'] : $item['name'];
+                $files[] = $filePath;
+            }
+        } elseif ($item['type'] === 'dir') {
+            // 排除特定目录
+            if (!in_array($item['name'], $excludeDirs)) {
+                $subPath = !empty($path) ? $path . '/' . $item['name'] : $item['name'];
+                $files = array_merge($files, getGithubFiles($apiUrl, $repo, $branch, $subPath, $excludeDirs));
+            }
+        }
+    }
+    
+    return $files;
+}
+
+// 辅助函数：获取 GitHub 仓库的最新 commit hash
+function getGithubLatestCommit($repo, $branch) {
+    $url = "https://api.github.com/repos/{$repo}/commits/{$branch}";
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'GET',
+            'header' => "User-Agent: Modern-Chat-Update\r\n"
+        ]
+    ]);
+    
+    $response = @file_get_contents($url, false, $context);
+    
+    if ($response === false) {
+        return null;
+    }
+    
+    $data = json_decode($response, true);
+    
+    return $data['sha'] ?? null;
+}
+
+// 检查用户是否登录
+if (!isset($_SESSION['user_id'])) {
+    header('Location: login.php');
+    exit;
+}
+
+// 检查用户是否为管理员
+if (!isset($_SESSION['is_admin']) || !$_SESSION['is_admin']) {
+    // 非管理员，跳转到聊天页面
+    header('Location: chat.php');
+    exit;
+}
+
+// 处理AJAX更新请求
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax']) && $_POST['ajax'] === 'true') {
+    // 设置无缓冲输出
+    @ini_set('zlib.output_compression', 0);
+    @ini_set('implicit_flush', 1);
+    ob_implicit_flush(1);
+    
+    // 清除所有缓冲区
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    
+    header('Content-Type: text/event-stream');
+    header('Cache-Control: no-cache');
+    header('Connection: keep-alive');
+    header('X-Accel-Buffering: no'); // Nginx
+    
+    // 辅助函数：发送数据并刷新缓冲区
+    function sendMsg($data) {
+        echo "data: " . json_encode($data) . "\n\n";
+        // 添加填充数据以强制刷新缓冲区 (针对某些服务器配置)，作为注释发送避免干扰解析
+        echo ": " . str_repeat(' ', 4096) . "\n\n";
+        flush();
+    }
+    
+    // 处理撤销更新请求
+    if (isset($_POST['action']) && $_POST['action'] === 'rollback') {
+        sendMsg(["status" => "start", "message" => "开始撤销更新..."]);
+        
+        // 检查old目录是否存在
+        if (is_dir('old')) {
+            try {
+                $rollbackCount = 0;
+                $rollbackFailed = 0;
+                
+                // 使用递归迭代器遍历old目录
+                $dirIterator = new RecursiveDirectoryIterator('old', RecursiveDirectoryIterator::SKIP_DOTS);
+                $iterator = new RecursiveIteratorIterator($dirIterator, RecursiveIteratorIterator::SELF_FIRST);
+                
+                // 先统计文件数量
+                $filesToRestore = [];
+                foreach ($iterator as $item) {
+                    if ($item->isFile()) {
+                        // 手动计算相对路径
+                        $pathName = $item->getPathname();
+                        $pathName = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $pathName);
+                        $prefix = 'old' . DIRECTORY_SEPARATOR;
+                        
+                        $subPath = '';
+                        if (strpos($pathName, $prefix) === 0) {
+                            $subPath = substr($pathName, strlen($prefix));
+                        } else {
+                            $subPath = $item->getFilename();
+                        }
+                        
+                        $filesToRestore[] = [
+                            'path' => $item->getPathname(),
+                            'subPath' => $subPath
+                        ];
+                    }
+                }
+                
+                $totalFiles = count($filesToRestore);
+                $currentFile = 0;
+                
+                foreach ($filesToRestore as $fileInfo) {
+                    $currentFile++;
+                    $progress = $totalFiles > 0 ? round(($currentFile / $totalFiles) * 100) : 100;
+                    $oldFilePath = $fileInfo['path'];
+                    $newFilePath = $fileInfo['subPath'];
+                    
+                    // 发送进度更新
+                    sendMsg(["status" => "progress", "progress" => $progress, "message" => "恢复文件: {$newFilePath}"]);
+                    usleep(50000);
+                    
+                    // 确保目标目录存在
+                    $destDir = dirname($newFilePath);
+                    if ($destDir !== '.' && !is_dir($destDir)) {
+                        @mkdir($destDir, 0777, true);
+                    }
+                    
+                    // 恢复旧文件
+                    if (copy($oldFilePath, $newFilePath)) {
+                        $rollbackCount++;
+                    } else {
+                        $rollbackFailed++;
+                    }
+                }
+                
+                if ($rollbackCount > 0) {
+                    $successMsg = "成功撤销更新，恢复了 {$rollbackCount} 个文档";
+                    if ($rollbackFailed > 0) {
+                        $successMsg = "，失败 {$rollbackFailed} 个文档";
+                    }
+                    sendMsg(["status" => "complete", "success" => true, "message" => $successMsg]);
+                } else {
+                    sendMsg(["status" => "complete", "success" => false, "message" => "撤销更新失败，没有可恢复的文档"]);
+                }
+            } catch (Exception $e) {
+                sendMsg(["status" => "complete", "success" => false, "message" => "撤销更新出错: " . $e->getMessage()]);
+            }
+        } else {
+            sendMsg(["status" => "complete", "success" => false, "message" => "撤销更新失败，没有找到备份文档"]);
+        }
+    }
+    // 处理更新请求
+    elseif (isset($_POST['action']) && $_POST['action'] === 'update') {
+        sendMsg(["status" => "start", "message" => "开始更新系统..."]);
+        
+        $updateSuccess = true;
+        
+        // 获取配置中的更新源设置
+        $updateSource = 'hyacine';
+        $githubRepo = '';
+        $githubBranch = 'main';
+        
+        $configFile = 'config/config.json';
+        if (file_exists($configFile)) {
+            $configJson = file_get_contents($configFile);
+            $config = json_decode($configJson, true);
+            if ($config) {
+                if (isset($config['update_source'])) {
+                    $updateSource = $config['update_source'];
+                }
+                if (isset($config['github_repo'])) {
+                    $githubRepo = $config['github_repo'];
+                }
+                if (isset($config['github_branch'])) {
+                    $githubBranch = $config['github_branch'];
+                }
+            }
+        }
+        
+        // 创建old目录
+        sendMsg(["status" => "progress", "progress" => 5, "message" => "准备更新环境..."]);
+        usleep(50000);
+        
+        if (!is_dir('old')) {
+            if (!mkdir('old', 0777, true)) {
+                sendMsg(["status" => "complete", "success" => false, "message" => "无法创建备份目录"]);
+                exit;
+            }
+        }
+        
+        // 获取更新信息
+        $updateUrl = 'https://updata.hyacine.com.cn/updata.json';
+        $githubRawUrl = '';
+        
+        if ($updateSource === 'github' && !empty($githubRepo)) {
+            // 使用 GitHub 作为更新源
+            $githubRawUrl = 'https://raw.githubusercontent.com/' . $githubRepo . '/' . $githubBranch . '/';
+            $githubApiUrl = 'https://api.github.com/repos/' . $githubRepo . '/contents';
+            
+            // 从 GitHub 获取 version.json 获取文件列表
+            $githubVersionJson = @file_get_contents($githubRawUrl . 'version.json');
+            if ($githubVersionJson === false) {
+                sendMsg(["status" => "complete", "success" => false, "message" => "无法连接到 GitHub 仓库"]);
+                exit;
+            }
+            
+            $versionData = json_decode($githubVersionJson, true);
+            if (!$versionData || !isset($versionData['Version'])) {
+                sendMsg(["status" => "complete", "success" => false, "message" => "无法获取版本信息"]);
+                exit;
+            }
+            
+            $updateInfo['updatafiles'] = getGithubFiles($githubApiUrl, $githubRepo, $githubBranch);
+        } else {
+            // 使用默认 hyacine 服务器
+            $updateJson = file_get_contents($updateUrl);
+            
+            if ($updateJson === false) {
+                sendMsg(["status" => "complete", "success" => false, "message" => "无法连接到更新服务器"]);
+                exit;
+            }
+            
+            $updateInfo = json_decode($updateJson, true);
+            
+            if ($updateInfo === null || !isset($updateInfo['updatafiles'])) {
+                sendMsg(["status" => "complete", "success" => false, "message" => "更新信息格式错误"]);
+                exit;
+            }
+        }
+        
+        $totalFiles = count($updateInfo['updatafiles']);
+        
+        // 检查服务器硬盘空间
+        sendMsg(["status" => "progress", "progress" => 10, "message" => "检查服务器空间..."]);
+        usleep(50000);
+        
+        $requiredSpace = 0;
+        
+        // 获取待更新文件的实际大小
+        $checkedCount = 0;
+        foreach ($updateInfo['updatafiles'] as $file) {
+            $checkedCount++;
+            // 细化进度：10% - 20%
+            $checkProgress = 10 + round(($checkedCount / $totalFiles) * 10);
+            sendMsg(["status" => "progress", "progress" => $checkProgress, "message" => "检查文件: {$file}"]);
+            
+            if ($updateSource === 'github' && !empty($githubRawUrl)) {
+                $fileUrl = $githubRawUrl . $file;
+            } else {
+                $fileUrl = 'https://updata.hyacine.com.cn/' . $file;
+            }
+            $fileSize = 0;
+            
+            // 使用curl获取远程文件大小
+            $ch = curl_init($fileUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_NOBODY, true); // 只获取头部信息
+            curl_setopt($ch, CURLOPT_HEADER, true);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); // 跟随重定向
+            if ($updateSource === 'github' && !empty($githubRawUrl)) {
+                curl_setopt($ch, CURLOPT_USERAGENT, 'Modern-Chat-Update');
+            }
+            $headers = curl_exec($ch);
+            if ($headers !== false) {
+                $contentLength = curl_getinfo($ch, CURLINFO_CONTENT_LENGTH_DOWNLOAD);
+                if ($contentLength > 0) {
+                    $fileSize = $contentLength;
+                } else {
+                    $fileSize = 100 * 1024; // 100KB
+                }
+            } else {
+                $fileSize = 100 * 1024; // 100KB
+            }
+            
+            $requiredSpace += $fileSize;
+        }
+        
+        // 增加备份所需的空间
+        $requiredSpace *= 2;
+        
+        // 获取服务器剩余空间
+        $freeSpace = disk_free_space('.');
+        
+        if ($freeSpace < $requiredSpace) {
+            $requiredMB = round($requiredSpace / (1024 * 1024), 2);
+            $freeMB = round($freeSpace / (1024 * 1024), 2);
+            sendMsg(["status" => "complete", "success" => false, "message" => "服务器剩余空间不足，需额外 {$requiredMB}MB，但只有 {$freeMB}MB 可用"]);
+            exit;
+        }
+        
+        // 备份当前文件
+        sendMsg(["status" => "progress", "progress" => 20, "message" => "备份当前文件..."]);
+        usleep(50000);
+        
+        $backupSuccess = true;
+        $currentFile = 0;
+        foreach ($updateInfo['updatafiles'] as $file) {
+            $currentFile++;
+            $progress = 20 + round(($currentFile / $totalFiles) * 30);
+            
+            // 发送进度更新
+            sendMsg(["status" => "progress", "progress" => $progress, "message" => "备份文件: {$file}"]);
+            usleep(50000);
+            
+            // 只备份存在的文件
+            if (file_exists($file)) {
+                // 确保old目录中对应的子目录存在
+                $destPath = 'old/' . $file;
+                $destDir = dirname($destPath);
+                if (!is_dir($destDir)) {
+                    if (!mkdir($destDir, 0777, true)) {
+                        $backupSuccess = false;
+                        sendMsg(["status" => "complete", "success" => false, "message" => "无法创建备份目录: {$destDir}"]);
+                        exit;
+                    }
+                }
+                
+                // 备份到old目录
+                if (!copy($file, $destPath)) {
+                    $backupSuccess = false;
+                    sendMsg(["status" => "complete", "success" => false, "message" => "无法备份文件: {$file}"]);
+                    exit;
+                }
+            }
+        }
+        
+        // 下载并替换文件
+        sendMsg(["status" => "progress", "progress" => 50, "message" => "开始下载更新文件..."]);
+        usleep(50000);
+        
+        $successCount = 0;
+        $failedCount = 0;
+        $currentFile = 0;
+        
+        foreach ($updateInfo['updatafiles'] as $file) {
+            $currentFile++;
+            $progress = 50 + round(($currentFile / $totalFiles) * 50);
+            
+            // 发送进度更新
+            sendMsg(["status" => "progress", "progress" => $progress, "message" => "更新文件: {$file}"]);
+            usleep(50000);
+            
+            if ($updateSource === 'github' && !empty($githubRawUrl)) {
+                $fileUrl = $githubRawUrl . $file;
+            } else {
+                $fileUrl = 'https://updata.hyacine.com.cn/' . $file;
+            }
+            
+            $options = [];
+            if ($updateSource === 'github' && !empty($githubRawUrl)) {
+                $options = [
+                    'http' => [
+                        'method' => 'GET',
+                        'header' => "User-Agent: Modern-Chat-Update\r\n"
+                    ]
+                ];
+            }
+            
+            $context = stream_context_create($options);
+            $fileContent = file_get_contents($fileUrl, false, $context);
+            
+            if ($fileContent !== false) {
+                // 确保目标目录存在
+                $destDir = dirname($file);
+                if ($destDir !== '.' && !is_dir($destDir)) {
+                    // 如果目录不存在，创建它（包含父目录）
+                    if (!mkdir($destDir, 0777, true)) {
+                        sendMsg(["status" => "progress", "progress" => $progress, "message" => "无法创建目录: {$destDir}"]);
+                        $failedCount++;
+                        continue; // 无法创建目录，跳过此文件
+                    }
+                }
+                
+                // 保存文件
+                $result = file_put_contents($file, $fileContent);
+                if ($result !== false) {
+                    $successCount++;
+                } else {
+                    $failedCount++;
+                }
+            } else {
+                $failedCount++;
+            }
+        }
+        
+        if ($successCount > 0) {
+            $successMsg = "成功更新 {$successCount} 个文档";
+            if ($failedCount > 0) {
+                $successMsg .= "，失败 {$failedCount} 个文档";
+            }
+            sendMsg(["status" => "complete", "success" => true, "message" => $successMsg]);
+        } else {
+            sendMsg(["status" => "complete", "success" => false, "message" => "更新失败，无法下载文档"]);
+        }
+    }
+    exit;
+}
+
+// 获取当前版本信息
+$currentVersion = '未知版本';
+// 优先从version.json获取版本信息
+if (file_exists('version.json')) {
+    $versionJson = file_get_contents('version.json');
+    if ($versionJson !== false) {
+        $versionData = json_decode($versionJson, true);
+        if ($versionData && isset($versionData['Version'])) {
+            $currentVersion = $versionData['Version'];
+        }
+    }
+}
+// 如果version.json不存在或解析失败，尝试从version.txt获取
+elseif (file_exists('version.txt')) {
+    $currentVersion = trim(file_get_contents('version.txt'));
+}
+
+// 获取配置中的更新源设置
+$updateSource = 'hyacine'; // 默认使用 hyacine 服务器
+$githubRepo = '#'; // GitHub 仓库地址
+$githubBranch = 'main'; // GitHub 分支
+
+$configFile = 'config/config.json';
+if (file_exists($configFile)) {
+    $configJson = file_get_contents($configFile);
+    $config = json_decode($configJson, true);
+    if ($config) {
+        if (isset($config['update_source'])) {
+            $updateSource = $config['update_source'];
+        }
+        if (isset($config['github_repo'])) {
+            $githubRepo = $config['github_repo'];
+        }
+        if (isset($config['github_branch'])) {
+            $githubBranch = $config['github_branch'];
+        }
+    }
+}
+
+// 根据更新源获取最新版本信息
+$isLatestVersion = false;
+$updateUrl = 'https://updata.hyacine.com.cn/updata.json';
+$updateJson = false;
+
+if ($updateSource === 'github' && !empty($githubRepo)) {
+    // 使用 GitHub 作为更新源
+    $githubApiUrl = 'https://api.github.com/repos/' . $githubRepo . '/contents';
+    $githubRawUrl = 'https://raw.githubusercontent.com/' . $githubRepo . '/' . $githubBranch . '/';
+    
+    // 获取 version.json 从 GitHub
+    $githubVersionUrl = $githubRawUrl . 'version.json';
+    $githubVersionJson = @file_get_contents($githubVersionUrl);
+    
+    if ($githubVersionJson !== false) {
+        $versionData = json_decode($githubVersionJson, true);
+        if ($versionData && isset($versionData['Version'])) {
+            $githubVersion = $versionData['Version'];
+            
+            // 比较版本
+            if ($githubVersion === $currentVersion) {
+                $isLatestVersion = true;
+            }
+            
+            // 获取文件列表
+            $updateInfo = [
+                'version' => $githubVersion,
+                'updatamessage' => $versionData['update_message'] ?? '从 GitHub 获取更新',
+                'infomessage' => $versionData['infomessage'] ?? '',
+                'source' => 'github',
+                'github_repo' => $githubRepo,
+                'github_branch' => $githubBranch
+            ];
+            
+            // 获取需要更新的文件列表
+            $filesToUpdate = getGithubFiles($githubApiUrl, $githubRepo, $githubBranch);
+            $updateInfo['updatafiles'] = $filesToUpdate;
+        } else {
+            $error = '无法解析 GitHub 版本信息';
+        }
+    } else {
+        $error = '无法连接到 GitHub 仓库';
+    }
+} else {
+    // 使用默认 hyacine 服务器
+    $updateJson = file_get_contents($updateUrl);
+    
+    if ($updateJson === false) {
+        $error = '无法连接到更新服务器';
+    } else {
+        $updateInfo = json_decode($updateJson, true);
+        
+        if ($updateInfo === null) {
+            $error = '更新信息格式错误';
+        } else {
+            // 检查是否为最新版本
+            if (isset($updateInfo['version']) && $updateInfo['version'] === $currentVersion) {
+                $isLatestVersion = true;
+            }
+        }
+    }
+}
+
+$error = '';
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统更新 - Mummories</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 500px;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: #fff;
+            color: #333;
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid #e5e5e5;
+        }
+        
+        .header h1 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        /* 最新版本样式 */
+        .latest-version {
+            text-align: center;
+            padding: 30px 0;
+        }
+        
+        .latest-version-icon {
+            font-size: 64px;
+            margin-bottom: 15px;
+        }
+        
+        .latest-version-text {
+            font-size: 16px;
+            color: #333;
+            font-weight: 500;
+        }
+        
+        .version-info {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #fafafa;
+            border-radius: 8px;
+        }
+        
+        .version-item {
+            text-align: center;
+        }
+        
+        .version-label {
+            font-size: 14px;
+            color: #999;
+            margin-bottom: 8px;
+        }
+        
+        .version-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .version-value.current {
+            color: #07c160;
+        }
+        
+        .version-value.latest {
+            color: #1989fa;
+        }
+        
+        .update-message {
+            background: #ebf5ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+        }
+        
+        .update-message h3 {
+            color: #1989fa;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .update-message p {
+            color: #333;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        
+        .update-files {
+            margin-bottom: 25px;
+        }
+        
+        .update-files h3 {
+            color: #333;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        
+        .files-list {
+            background: #fafafa;
+            border-radius: 8px;
+            overflow: hidden;
+            /* 限制高度 */
+            max-height: 467px;
+            overflow-y: auto;
+            border: 1px solid #f0f0f0;
+            /* 自定义滚动条 */
+            scrollbar-width: thin;
+            scrollbar-color: #d1d5db #fafafa;
+        }
+
+        /* Webkit浏览器滚动条样式 */
+        .files-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .files-list::-webkit-scrollbar-track {
+            background: #fafafa;
+        }
+
+        .files-list::-webkit-scrollbar-thumb {
+            background-color: #d1d5db;
+            border-radius: 3px;
+        }
+        
+        .file-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .file-item:last-child {
+            border-bottom: none;
+        }
+        
+        .file-name {
+            font-size: 13px;
+            color: #333;
+        }
+        
+        .file-status {
+            font-size: 12px;
+            color: #999;
+        }
+        
+        .file-status.downloaded {
+            color: #07c160;
+        }
+        
+        .file-status.updating {
+            color: #1989fa;
+        }
+        
+        .actions {
+            text-align: center;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-block;
+            margin: 0 8px;
+        }
+        
+        .btn-primary {
+            background: #07c160;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #06ad56;
+        }
+        
+        .btn-primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .btn-secondary {
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .btn-secondary:hover {
+            background: #eeeeee;
+        }
+        
+        .alert {
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        
+        .alert-success {
+            background: #f6ffed;
+            color: #52c41a;
+            border: 1px solid #b7eb8f;
+        }
+        
+        .alert-error {
+            background: #fff2f0;
+            color: #ff4d4f;
+            border: 1px solid #ffccc7;
+        }
+        
+        .alert-info {
+            background: #ebf5ff;
+            color: #1989fa;
+            border: 1px solid #91d5ff;
+        }
+        
+        .info-message {
+            border: 1px solid #ff4d4f;
+            background-color: #fff2f0;
+            color: #ff4d4f;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            font-weight: bold;
+        }
+        
+        .info-message h3 {
+            color: #ff4d4f;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .info-message p {
+            color: #ff4d4f;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        
+        /* 进度条样式 */
+        .progress-container {
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #07c160, #1989fa);
+            border-radius: 4px;
+            width: 0%;
+            transition: width 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            animation: progress-shine 1.5s infinite;
+        }
+        
+        @keyframes progress-shine {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        
+        .progress-text {
+            text-align: center;
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        
+        /* 加载动画样式 */
+        .loading-container {
+            display: none;
+            text-align: center;
+            padding: 30px 0;
+        }
+        
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f0f0f0;
+            border-top: 4px solid #1989fa;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        /* 更新状态容器 */
+        .update-status {
+            margin: 20px 0;
+            padding: 15px;
+            background: #282c34;
+            color: #abb2bf;
+            border-radius: 8px;
+            display: none;
+            font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+            height: 460px;
+            overflow-y: auto;
+            border: 1px solid #3e4451;
+            /* 自定义滚动条 */
+            scrollbar-width: thin;
+            scrollbar-color: #4b5263 #282c34;
+        }
+
+        /* Webkit浏览器滚动条样式 */
+        .update-status::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .update-status::-webkit-scrollbar-track {
+            background: #282c34;
+            border-radius: 4px;
+        }
+
+        .update-status::-webkit-scrollbar-thumb {
+            background-color: #4b5263;
+            border-radius: 4px;
+            border: 2px solid #282c34;
+        }
+
+        .status-item {
+            margin-bottom: 4px;
+            font-size: 12px;
+            line-height: 1.5;
+            border-bottom: 1px solid #3e4451;
+            padding-bottom: 2px;
+        }
+        
+        .status-item:last-child {
+            margin-bottom: 0;
+            border-bottom: none;
+        }
+
+        /* 隐藏其他内容的类 */
+        .hidden-during-update {
+            display: none !important;
+        }
+        
+        /* 动画效果 */
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .version-info {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>系统更新</h1>
+            <p style="font-size: 12px; color: #666; margin-top: 5px;">Mummories 更新系统</p>
+        </div>
+        
+        <div class="content">
+            <!-- 进度条区域 -->
+            <div class="progress-container" id="progress-container" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                </div>
+                <div class="progress-text">
+                    <span id="progress-percent">0%</span>
+                    <span id="progress-message">准备开始...</span>
+                </div>
+            </div>
+            
+            <!-- 加载动画 -->
+            <div class="loading-container" id="loading-container">
+                <div class="loading-spinner"></div>
+                <div class="loading-text" id="loading-text">正在加载...</div>
+            </div>
+            
+            <!-- 状态日志区域 -->
+            <div class="update-status" id="update-status" style="display: none;"></div>
+            
+            <!-- 错误/成功提示区域 -->
+            <div class="message-area" id="message-area"></div>
+            
+            <div id="main-content">
+                    <?php if ($isLatestVersion): ?>
+                        <!-- 已是最新版本 -->
+                        <div class="latest-version">
+                            <div class="latest-version-icon">✨</div>
+                            <div class="latest-version-text">已是最新版本无需更新</div>
+                        </div>
+                    <?php else: ?>
+                        <!-- 有新版本 -->
+                        <div class="version-info">
+                            <div class="version-item">
+                                <div class="version-label">当前版本</div>
+                                <div class="version-value current"><?php echo $currentVersion; ?></div>
+                            </div>
+                            <div class="version-item">
+                                <div class="version-label">最新版本</div>
+                                <div class="version-value latest"><?php echo $updateInfo['version']; ?></div>
+                            </div>
+                        </div>
+                        
+                        <?php if (isset($updateInfo['infomessage']) && !empty($updateInfo['infomessage'])): ?>
+                            <div class="info-message">
+                                <h3>重要提示</h3>
+                                <p><?php echo $updateInfo['infomessage']; ?></p>
+                            </div>
+                        <?php endif; ?>
+                        
+                        <div class="update-message">
+                            <h3>更新内容</h3>
+                            <p><?php echo $updateInfo['updatamessage']; ?></p>
+                        </div>
+                        
+                        <div class="update-files">
+                            <h3>更新文件 <span style="font-size: 12px; font-weight: normal; color: #666; margin-left: 5px;">(共 <?php echo count($updateInfo['updatafiles']); ?> 个文件)</span></h3>
+                            <div class="files-list">
+                                <?php foreach ($updateInfo['updatafiles'] as $file): ?>
+                                    <div class="file-item">
+                                        <span class="file-name"><?php echo $file; ?></span>
+                                        <span class="file-status" data-file="<?php echo $file; ?>">待更新</span>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                <?php endif; ?>
+                
+                <!-- 操作按钮区域 -->
+                <div class="actions" id="actions-area">
+                    <?php if (!$isLatestVersion): ?>
+                        <button type="button" class="btn btn-primary" id="update-btn" onclick="startUpdate()">立即更新</button>
+                    <?php endif; ?>
+                    
+                    <!-- 撤销更新按钮 -->
+                    <button type="button" class="btn btn-secondary" id="rollback-btn" onclick="confirmRollback()" style="<?php echo (is_dir('old') && count(array_diff(scandir('old'), array('.', '..'))) > 0) ? '' : 'display:none;'; ?>">撤销更新</button>
+                    
+                    <!-- 返回按钮 -->
+                    <a href="chat.php" class="btn btn-secondary">返回聊天</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 显示消息
+        function showMessage(message, type = 'info') {
+            const messageArea = document.getElementById('message-area');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `alert alert-${type} fade-in`;
+            messageDiv.textContent = message;
+            messageArea.appendChild(messageDiv);
+            
+            // 5秒后自动移除消息
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.remove();
+                }
+            }, 5000);
+        }
+        
+        // 显示进度条
+        function showProgress() {
+            document.getElementById('progress-container').style.display = 'block';
+            document.getElementById('update-status').style.display = 'block';
+        }
+        
+        // 更新进度
+        function updateProgress(percent, message) {
+            document.getElementById('progress-fill').style.width = percent + '%';
+            // document.getElementById('progress-text').textContent = message; 
+            // 修正：这里progress-text是容器，里面有两个span
+            document.getElementById('progress-percent').textContent = percent + '%';
+            document.getElementById('progress-message').textContent = message;
+        }
+        
+        // 显示加载动画
+        function showLoading(message = '正在更新系统...') {
+            document.getElementById('loading-container').style.display = 'block';
+            document.getElementById('loading-text').textContent = message;
+        }
+        
+        // 隐藏加载动画
+        function hideLoading() {
+            document.getElementById('loading-container').style.display = 'none';
+        }
+        
+        // 禁用按钮
+        function disableButtons() {
+            const buttons = document.querySelectorAll('.btn');
+            buttons.forEach(btn => {
+                btn.disabled = true;
+            });
+        }
+        
+        // 启用按钮
+        function enableButtons() {
+            const buttons = document.querySelectorAll('.btn');
+            buttons.forEach(btn => {
+                btn.disabled = false;
+            });
+        }
+        
+        // 添加更新状态日志
+        function addStatusLog(message) {
+            const statusContainer = document.getElementById('update-status');
+            statusContainer.style.display = 'block';
+            
+            const statusItem = document.createElement('div');
+            statusItem.className = 'status-item fade-in';
+            statusItem.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            statusContainer.appendChild(statusItem);
+            
+            // 滚动到底部
+            statusContainer.scrollTop = statusContainer.scrollHeight;
+        }
+        
+        // 更新文件状态
+        function updateFileStatus(file, status) {
+            const statusElements = document.querySelectorAll(`[data-file="${file}"]`);
+            statusElements.forEach(element => {
+                element.textContent = status;
+                if (status === '已更新') {
+                    element.className = 'file-status downloaded';
+                } else if (status === '正在更新') {
+                    element.className = 'file-status updating';
+                } else {
+                    element.className = 'file-status';
+                }
+            });
+        }
+        
+        // 开始更新
+        function startUpdate() {
+            // 隐藏主内容
+            document.getElementById('main-content').classList.add('hidden-during-update');
+            
+            // 显示进度条和加载动画
+            showProgress();
+            showLoading('正在准备更新...');
+            // 禁用按钮区域            
+            disableButtons(); // 按钮区域已隐藏，不需要禁用
+            // 清空之前的状态
+            document.getElementById('update-status').innerHTML = '';
+            document.getElementById('message-area').innerHTML = '';
+            
+            // 使用XMLHttpRequest进行长轮询
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', window.location.href, true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            
+            xhr.onprogress = function(event) {
+                // 处理部分响应数据
+                const responseText = xhr.responseText;
+                const lines = responseText.split('\n\n');
+                
+                // 只处理新接收到的数据
+                const processedLength = xhr.processedLength || 0;
+                const newContent = responseText.substring(processedLength);
+                xhr.processedLength = responseText.length;
+                
+                const newLines = newContent.split('\n\n');
+                
+                for (const line of newLines) {
+                    const trimmedLine = line.trim();
+                    if (trimmedLine.startsWith('data:')) {
+                        const dataStr = trimmedLine.replace('data: ', '');
+                        if (!dataStr.trim()) continue;
+                        
+                        try {
+                            const data = JSON.parse(dataStr);
+                            
+                            switch (data.status) {
+                                case 'start':
+                                    updateProgress(0, data.message);
+                                    addStatusLog(data.message);
+                                    break;
+                                case 'progress':
+                                    updateProgress(data.progress, data.message);
+                                    addStatusLog(data.message);
+                                    
+                                    // 更新文件状态
+                                    if (data.message.includes('更新文件: ')) {
+                                        const file = data.message.replace('更新文件: ', '');
+                                        updateFileStatus(file, '正在更新');
+                                    } else if (data.message.includes('备份文件: ')) {
+                                         // 也可以显示备份状态
+                                         }
+                                    break;
+                                case 'complete':
+                                    hideLoading();
+                                    enableButtons();
+                                    
+                                    if (data.success) {
+                                        showMessage(data.message, 'success');
+                                        updateProgress(100, '更新完成');
+                                        
+                                        // 更新所有文件状态为已更新
+                                        const fileElements = document.querySelectorAll('[data-file]');
+                                        fileElements.forEach(element => {
+                                            updateFileStatus(element.dataset.file, '已更新');
+                                        });
+                                        
+                                        // 重新显示主内容，但隐藏立即更新按钮，显示撤销按钮
+                                        document.getElementById('main-content').classList.remove('hidden-during-update');
+                                        const updateBtn = document.getElementById('update-btn');
+                                        if (updateBtn) updateBtn.style.display = 'none';
+                                        
+                                        const rollbackBtn = document.getElementById('rollback-btn');
+                                        if (rollbackBtn) rollbackBtn.style.display = 'inline-block';
+                                        
+                                        // 更新版本显示
+                                        const currentVersionEl = document.querySelector('.version-value.current');
+                                        if (currentVersionEl) {
+                                            const latestVersionEl = document.querySelector('.version-value.latest');
+                                            if (latestVersionEl) {
+                                                currentVersionEl.textContent = latestVersionEl.textContent;
+                                                currentVersionEl.style.color = '#07c160'; // Green
+                                            }
+                                        }
+                                    } else {
+                                        showMessage(data.message, 'error');
+                                        // 出错时也显示回内容
+                                        document.getElementById('main-content').classList.remove('hidden-during-update');
+                                    }
+                                    return;
+                            }
+                        } catch (error) {
+                            console.error('解析更新数据失败:', error);
+                        }
+                    }
+                }
+            };
+            
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    if (xhr.status !== 200) {
+                        hideLoading();
+                        enableButtons();
+                        showMessage('更新请求失败: ' + xhr.statusText, 'error');
+                        document.getElementById('main-content').classList.remove('hidden-during-update');
+                    }
+                }
+            };
+            
+            xhr.onerror = function() {
+                hideLoading();
+                enableButtons();
+                showMessage('更新连接中断', 'error');
+            };
+            
+            // 发送请求
+            xhr.send('ajax=true&action=update');
+        }
+        
+        // 确认撤销更新
+        function confirmRollback() {
+            if (confirm('确定要撤销更新吗？这将恢复到更新前的版本')) {
+                rollbackUpdate();
+            }
+        }
+        
+        // 撤销更新
+        function rollbackUpdate() {
+            // 隐藏主内容
+            document.getElementById('main-content').classList.add('hidden-during-update');
+            
+            // 显示进度条和加载动画
+            showProgress();
+            showLoading('正在撤销更新...');
+            // disableButtons();
+            
+            // 清空之前的状态
+            document.getElementById('update-status').innerHTML = '';
+            document.getElementById('message-area').innerHTML = '';
+            
+            // 使用XMLHttpRequest进行长轮询
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', window.location.href, true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 3 || xhr.readyState === 4) {
+                    const responseText = xhr.responseText;
+                    const lines = responseText.split('\n\n');
+                    
+                    for (const line of lines) {
+                        const trimmedLine = line.trim();
+                        if (trimmedLine.startsWith('data:')) {
+                            const dataStr = trimmedLine.replace('data: ', '');
+                            try {
+                                const data = JSON.parse(dataStr);
+                                
+                                switch (data.status) {
+                                    case 'start':
+                                        updateProgress(0, data.message);
+                                        addStatusLog(data.message);
+                                        break;
+                                    case 'progress':
+                                        updateProgress(data.progress, data.message);
+                                        addStatusLog(data.message);
+                                        break;
+                                    case 'complete':
+                                        hideLoading();
+                                        enableButtons();
+                                        
+                                        if (data.success) {
+                                            showMessage(data.message, 'success');
+                                            updateProgress(100, '撤销完成');
+                                            
+                                            // 重新显示主内容
+                                            document.getElementById('main-content').classList.remove('hidden-during-update');
+                                            
+                                            // 撤销后可能需要显示更新按钮，隐藏撤销按钮（如果没有备份了）
+                                            // 简单起见，刷新页面最稳妥，或者手动重置按钮状态
+                                            // 这里我们手动重置状态：显示更新按钮，隐藏撤销按钮(如果目录空了，但这里很难判断，所以简单刷新页面)
+                                            setTimeout(() => {
+                                                location.reload();
+                                            }, 1500);
+                                        } else {
+                                            showMessage(data.message, 'error');
+                                            document.getElementById('main-content').classList.remove('hidden-during-update');
+                                        }
+                                        return;
+                                }
+                            } catch (error) {
+                                console.error('解析撤销数据失败:', error);
+                            }
+                        }
+                    }
+                }
+                
+                if (xhr.readyState === 4) {
+                    if (xhr.status !== 200) {
+                        hideLoading();
+                        enableButtons();
+                        showMessage('撤销请求失败: ' + xhr.statusText, 'error');
+                    }
+                }
+            };
+            
+            xhr.onerror = function() {
+                hideLoading();
+                enableButtons();
+                showMessage('撤销连接中断', 'error');
+            };
+            
+            // 发送请求
+            xhr.send('ajax=true&action=rollback');
+        }
+        
+
+        
+        // 页面加载完成后，显示初始错误信息
+        document.addEventListener('DOMContentLoaded', function() {
+            <?php if (isset($error)): ?>
+                showMessage('<?php echo addslashes($error); ?>', 'error');
+            <?php endif; ?>
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,384 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>项目管理</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { overflow: auto; }
+        .projects-page {
+            position: relative; z-index: 2;
+            max-width: 1000px; margin: 0 auto;
+            padding: 24px; min-height: 100vh;
+        }
+        .projects-page-header {
+            display: flex; align-items: center; gap: 12px; margin-bottom: 20px;
+        }
+        .projects-page-header h1 { font-size: 22px; font-weight: 700; }
+        .back-link {
+            display: inline-flex; align-items: center; gap: 6px;
+            color: var(--text-muted); text-decoration: none;
+            font-size: 13px; padding: 6px 14px; border-radius: 999px;
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+            transition: all 0.25s;
+        }
+        .back-link:hover { color: #fff; background: rgba(255,255,255,0.12); }
+        .bg-fab {
+            position: fixed; bottom: 24px; left: 24px; z-index: 100;
+            width: 40px; height: 40px; border-radius: 50%;
+            border: 1.5px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(12px); color: #fff;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: all 0.3s; opacity: 0.6;
+        }
+        .bg-fab:hover { opacity: 1; background: rgba(255,255,255,0.15); }
+        .bg-panel {
+            position: fixed; bottom: 72px; left: 24px; z-index: 100;
+            width: 240px; padding: 16px;
+            background: rgba(30,34,40,0.85); backdrop-filter: blur(16px);
+            border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            display: none;
+        }
+        .bg-panel.show { display: block; }
+        /* 项目列表 */
+        .project-item {
+            position: relative; cursor: pointer;
+        }
+        .project-item .project-delete {
+            position: absolute; top: 10px; right: 10px;
+            background: rgba(255,80,80,0.15); border: 1px solid rgba(255,80,80,0.3);
+            color: #ff6b6b; border-radius: 6px; padding: 3px 8px;
+            font-size: 11px; cursor: pointer; opacity: 0; transition: opacity 0.2s;
+        }
+        .project-item:hover .project-delete { opacity: 1; }
+        .project-delete:hover { background: rgba(255,80,80,0.3) !important; }
+        .project-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+        .project-tag {
+            font-size: 11px; padding: 2px 8px; border-radius: 999px;
+            background: rgba(255,255,255,0.08); color: var(--text-muted);
+        }
+        .projects-empty {
+            text-align: center; padding: 40px; color: var(--text-muted);
+            font-size: 14px;
+        }
+        .projects-loading { text-align: center; padding: 40px; color: var(--text-muted); }
+        /* 新建项目模态框 */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0; z-index: 200;
+            background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
+            align-items: center; justify-content: center;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal-box {
+            width: 420px; max-width: 95vw;
+            background: rgba(30,34,40,0.95); border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 20px; padding: 28px; box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+        }
+        .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 18px; }
+        .modal-field { margin-bottom: 14px; }
+        .modal-field label { font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 5px; }
+        .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+        .section-actions { display: flex; align-items: center; gap: 10px; }
+        .projects-error { color: #ff6b6b; font-size: 13px; text-align: center; padding: 20px; }
+    </style>
+</head>
+<body>
+    <div class="bg" id="bgLayer">
+        <img class="bg-image" id="bgImage" alt="" style="display:none">
+        <div class="pattern-bg">
+            <svg class="cube-svg" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <pattern id="cube" x="0" y="0" width="60" height="52" patternUnits="userSpaceOnUse">
+                        <path d="M30 0 L60 15 L60 41 L30 52 L0 41 L0 15 Z" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/>
+                        <path d="M30 26 L60 15 M30 26 L0 15 M30 26 L30 52" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="0.5"/>
+                    </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#cube)"/>
+            </svg>
+        </div>
+    </div>
+    <div class="bg-blur" id="bgBlurLayer"></div>
+
+    <!-- 背景设置浮动面板 -->
+    <button class="bg-fab" id="bgFab" title="背景设置">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
+    <div class="bg-panel" id="bgPanel">
+        <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:#fff;">背景设置</div>
+        <label style="font-size:12px;color:var(--text-muted);">模糊度: <span id="blurVal">4</span>px</label>
+        <input type="range" class="glass-range" id="bgBlurRange" min="0" max="30" value="4" style="width:100%;margin:6px 0 12px;">
+        <label style="font-size:12px;color:var(--text-muted);">遮罩透明度: <span id="opacityVal">25</span>%</label>
+        <input type="range" class="glass-range" id="bgOpacityRange" min="0" max="100" value="25" style="width:100%;margin:6px 0 0;">
+    </div>
+
+    <!-- 新建项目模态框 -->
+    <div class="modal-overlay" id="newProjectModal">
+        <div class="modal-box">
+            <div class="modal-title">新建项目</div>
+            <div class="modal-field">
+                <label>项目名称 *</label>
+                <input type="text" class="glass-input" id="np_title" placeholder="例：我的项目" style="width:100%">
+            </div>
+            <div class="modal-field">
+                <label>项目描述</label>
+                <input type="text" class="glass-input" id="np_desc" placeholder="简短描述..." style="width:100%">
+            </div>
+            <div class="modal-field">
+                <label>访问链接</label>
+                <input type="text" class="glass-input" id="np_url" placeholder="https://..." style="width:100%">
+            </div>
+            <div class="modal-field">
+                <label>标签（逗号分隔）</label>
+                <input type="text" class="glass-input" id="np_tags" placeholder="Vue,TypeScript,Docker" style="width:100%">
+            </div>
+            <div class="modal-field">
+                <label>管理员密钥 *</label>
+                <input type="password" class="glass-input" id="np_key" placeholder="X-API-Key" style="width:100%" autocomplete="off">
+            </div>
+            <div id="np_error" style="font-size:12px;color:#ff6b6b;margin-top:8px;display:none;"></div>
+            <div class="modal-actions">
+                <button class="glass-btn" id="np_cancel">取消</button>
+                <button class="glass-btn btn-primary" id="np_submit">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="projects-page">
+        <div class="projects-page-header">
+            <a class="back-link" href="index.html">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+                返回主页
+            </a>
+            <h1>项目管理</h1>
+        </div>
+        <div class="content-card glass-card">
+            <div class="section-header" style="margin-bottom:16px;">
+                <div class="section-actions">
+                    <input type="text" class="glass-input" id="searchInput" placeholder="搜索项目..." style="width:200px;">
+                    <button class="glass-btn btn-primary" id="addBtn">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                        新建项目
+                    </button>
+                </div>
+            </div>
+            <div class="projects-grid" id="projectsGrid">
+                <div class="projects-loading">加载中...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        'use strict';
+
+        // ===== 背景（复用 IndexedDB 缓存，服务器代理优先）=====
+        var bgImage   = document.getElementById('bgImage');
+        var patternBg = document.querySelector('.pattern-bg');
+        var bgBlurEl  = document.getElementById('bgBlurLayer');
+        var BG_DB_NAME = 'homepageBgDB', BG_STORE = 'bgStore', BG_KEY = 'currentBg';
+        var apis = ['/api/v1/bg', 'https://t.mwm.moe/pc/', 'https://www.loliapi.com/acg/pc/'];
+        var _blobUrl = null;
+        function openBgDB(cb) {
+            var req = indexedDB.open(BG_DB_NAME, 1);
+            req.onupgradeneeded = function (e) { e.target.result.createObjectStore(BG_STORE); };
+            req.onsuccess = function (e) { cb(e.target.result); };
+            req.onerror = function () { cb(null); };
+        }
+        function showBlob(blob) {
+            if (_blobUrl) URL.revokeObjectURL(_blobUrl);
+            _blobUrl = URL.createObjectURL(blob);
+            bgImage.src = _blobUrl; bgImage.style.display = '';
+            if (patternBg) patternBg.style.display = 'none';
+        }
+        function fetchBg(i) {
+            if (!bgImage || i >= apis.length) return;
+            fetch(apis[i]).then(function (r) { return r.ok ? r.blob() : Promise.reject(); })
+                .then(function (blob) {
+                    openBgDB(function (db) {
+                        if (db) { var tx = db.transaction(BG_STORE, 'readwrite'); tx.objectStore(BG_STORE).put(blob, BG_KEY); }
+                    });
+                    showBlob(blob);
+                }).catch(function () { fetchBg(i + 1); });
+        }
+        openBgDB(function (db) {
+            if (!db) { fetchBg(0); return; }
+            var r = db.transaction(BG_STORE, 'readonly').objectStore(BG_STORE).get(BG_KEY);
+            r.onsuccess = function () { r.result ? showBlob(r.result) : fetchBg(0); };
+            r.onerror = function () { fetchBg(0); };
+        });
+
+        // 背景滤镜恢复
+        var savedBlur = '4', savedOpacity = '25';
+        try { savedBlur = localStorage.getItem('hp_bgBlur') || '4'; savedOpacity = localStorage.getItem('hp_bgOpacity') || '25'; } catch(e) {}
+        if (bgBlurEl) {
+            bgBlurEl.style.backdropFilter = 'blur(' + savedBlur + 'px)';
+            bgBlurEl.style.webkitBackdropFilter = 'blur(' + savedBlur + 'px)';
+            bgBlurEl.style.background = 'rgba(24, 28, 33, ' + (savedOpacity / 100) + ')';
+        }
+        var bgFab = document.getElementById('bgFab');
+        var bgPanel = document.getElementById('bgPanel');
+        var blurRange = document.getElementById('bgBlurRange');
+        var opacityRange = document.getElementById('bgOpacityRange');
+        var blurVal = document.getElementById('blurVal');
+        var opacityVal = document.getElementById('opacityVal');
+        if (blurRange) { blurRange.value = savedBlur; blurVal.textContent = savedBlur; }
+        if (opacityRange) { opacityRange.value = savedOpacity; opacityVal.textContent = savedOpacity; }
+        if (bgFab) bgFab.addEventListener('click', function () { bgPanel.classList.toggle('show'); });
+        document.addEventListener('click', function (e) {
+            if (bgPanel && bgFab && !bgPanel.contains(e.target) && e.target !== bgFab && !bgFab.contains(e.target)) bgPanel.classList.remove('show');
+        });
+        if (blurRange) blurRange.addEventListener('input', function () {
+            blurVal.textContent = this.value;
+            if (bgBlurEl) { bgBlurEl.style.backdropFilter = 'blur(' + this.value + 'px)'; bgBlurEl.style.webkitBackdropFilter = 'blur(' + this.value + 'px)'; }
+            try { localStorage.setItem('hp_bgBlur', this.value); } catch(e) {}
+        });
+        if (opacityRange) opacityRange.addEventListener('input', function () {
+            opacityVal.textContent = this.value;
+            if (bgBlurEl) bgBlurEl.style.background = 'rgba(24, 28, 33, ' + (this.value / 100) + ')';
+            try { localStorage.setItem('hp_bgOpacity', this.value); } catch(e) {}
+        });
+
+        // ===== 图标映射 =====
+        var ICONS = {
+            web:     '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+            chat:    '<svg viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>',
+            code:    '<svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+            star:    '<svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3z"/></svg>',
+            default: '<svg viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M9 21V9"/></svg>',
+        };
+
+        // ===== 项目数据 =====
+        var allProjects = [];
+        var grid = document.getElementById('projectsGrid');
+        var searchInput = document.getElementById('searchInput');
+
+        function escape(s) {
+            return String(s)
+                .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        function renderProjects(list) {
+            if (!list.length) {
+                grid.innerHTML = '<div class="projects-empty">暂无项目，点击"新建项目"添加</div>';
+                return;
+            }
+            grid.innerHTML = list.map(function (p) {
+                var icon = ICONS[p.icon] || ICONS.default;
+                var tagsHtml = (p.tags || []).map(function (t) {
+                    return '<span class="project-tag">' + escape(t) + '</span>';
+                }).join('');
+                var href = p.url && p.url !== '#' ? ' href="' + escape(p.url) + '"' : '';
+                return '<a class="project-item" data-id="' + p.id + '"' + href + ' target="_blank" rel="noopener noreferrer">' +
+                    '<div class="project-icon">' + icon + '</div>' +
+                    '<div class="project-title">' + escape(p.title) + '</div>' +
+                    '<div class="project-desc">' + escape(p.description || '') + '</div>' +
+                    (tagsHtml ? '<div class="project-tags">' + tagsHtml + '</div>' : '') +
+                    '<div class="project-actions" style="margin-top:12px;">' +
+                        '<button class="glass-btn btn-sm" onclick="window.open(this.closest(\'.project-item\').href||\'#\');return false;">查看</button>' +
+                        '<button class="glass-btn btn-sm btn-danger project-delete" onclick="deleteProject(event,' + p.id + ')">删除</button>' +
+                    '</div>' +
+                '</a>';
+            }).join('');
+        }
+
+        function loadProjects() {
+            grid.innerHTML = '<div class="projects-loading">加载中...</div>';
+            fetch('/api/v1/projects')
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.success) {
+                        allProjects = res.data || [];
+                        renderProjects(allProjects);
+                    } else {
+                        grid.innerHTML = '<div class="projects-error">加载失败: ' + escape(res.error || '') + '</div>';
+                    }
+                })
+                .catch(function () {
+                    grid.innerHTML = '<div class="projects-error">无法连接到后端，请确认服务正在运行</div>';
+                });
+        }
+
+        loadProjects();
+
+        // 搜索过滤
+        if (searchInput) {
+            searchInput.addEventListener('input', function () {
+                var kw = this.value.trim().toLowerCase();
+                if (!kw) { renderProjects(allProjects); return; }
+                renderProjects(allProjects.filter(function (p) {
+                    return p.title.toLowerCase().includes(kw) || (p.description || '').toLowerCase().includes(kw);
+                }));
+            });
+        }
+
+        // 删除项目
+        window.deleteProject = function (e, id) {
+            e.preventDefault(); e.stopPropagation();
+            var key = prompt('请输入管理员密钥以删除该项目：');
+            if (!key) return;
+            if (!confirm('确认删除该项目？此操作不可撤销。')) return;
+            fetch('/api/v1/projects/' + id, {
+                method: 'DELETE',
+                headers: { 'X-API-Key': key }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.success) { loadProjects(); }
+                    else { alert(res.error || '删除失败'); }
+                })
+                .catch(function () { alert('网络错误'); });
+        };
+
+        // ===== 新建项目模态框 =====
+        var modal    = document.getElementById('newProjectModal');
+        var addBtn   = document.getElementById('addBtn');
+        var np_cancel= document.getElementById('np_cancel');
+        var np_submit= document.getElementById('np_submit');
+        var np_error = document.getElementById('np_error');
+
+        if (addBtn) addBtn.addEventListener('click', function () { modal.classList.add('show'); });
+        if (np_cancel) np_cancel.addEventListener('click', function () { modal.classList.remove('show'); np_error.style.display = 'none'; });
+        modal.addEventListener('click', function (e) { if (e.target === modal) { modal.classList.remove('show'); } });
+
+        if (np_submit) np_submit.addEventListener('click', function () {
+            var title = document.getElementById('np_title').value.trim();
+            var key   = document.getElementById('np_key').value.trim();
+            np_error.style.display = 'none';
+            if (!title) { np_error.textContent = '项目名称不能为空'; np_error.style.display = 'block'; return; }
+            if (!key)   { np_error.textContent = '请输入管理员密钥'; np_error.style.display = 'block'; return; }
+
+            np_submit.disabled = true;
+            fetch('/api/v1/projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-API-Key': key },
+                body: JSON.stringify({
+                    title:       title,
+                    description: document.getElementById('np_desc').value.trim(),
+                    url:         document.getElementById('np_url').value.trim() || '#',
+                    tags:        document.getElementById('np_tags').value.trim(),
+                })
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.success) {
+                        modal.classList.remove('show');
+                        // 清空表单（保留密钥方便连续操作）
+                        ['np_title','np_desc','np_url','np_tags'].forEach(function (id) { document.getElementById(id).value = ''; });
+                        loadProjects();
+                    } else {
+                        np_error.textContent = res.error || '创建失败';
+                        np_error.style.display = 'block';
+                    }
+                })
+                .catch(function () { np_error.textContent = '网络错误，请重试'; np_error.style.display = 'block'; })
+                .finally(function () { np_submit.disabled = false; });
+        });
+
+    })();
+    </script>
+</body>
+</html>

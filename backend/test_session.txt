@@ -1,0 +1,2 @@
+register user_id=9
+avatar user_id=9

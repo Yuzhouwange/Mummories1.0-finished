@@ -1,0 +1,30 @@
+# 环境配置（包含密码等敏感信息）
+.env
+chat/.env
+
+# 用户上传的文件
+backend/avatars/
+backend/uploads/
+chat/avatars/
+chat/uploads/
+chat/new_music/
+chat/new_year_pic/
+
+# 运行时生成
+chat/installed.lock
+chat/error.log
+chat/keys/
+chat/config/config.json
+chat/vendor/
+
+# 测试/备份文件
+chat/test_*.php
+chat/login_process.php.bak
+
+# 数据库数据
+mummories_db/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+*.log

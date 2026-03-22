@@ -1,0 +1,77 @@
+services:
+  # PHP-FPM 后端服务
+  app:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_NAME: mummories
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD}
+      HOMEPAGE_API_KEY: ${HOMEPAGE_API_KEY}
+    volumes:
+      - ./backend:/var/www/backend
+      - ./chat:/var/www/chat
+    networks:
+      - mummories-net
+
+  # Nginx 服务
+  nginx:
+    image: docker.1ms.run/library/nginx:alpine
+    depends_on:
+      - app
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    volumes:
+      - ./frontend:/var/www/frontend:ro
+      - ./backend:/var/www/backend
+      - ./chat:/var/www/chat
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - mummories-net
+
+  # MySQL 数据库
+  db:
+    image: docker.1ms.run/library/mysql:5.7.44
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --init-connect='SET NAMES utf8mb4'
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_HOST: '%'
+      MYSQL_DATABASE: mummories
+    volumes:
+      - mummories_db:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ./db/02_chat_init.sql:/docker-entrypoint-initdb.d/02_chat_init.sql
+    networks:
+      - mummories-net
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p${DB_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # phpMyAdmin (可选，数据库管理)
+  phpmyadmin:
+    image: docker.1ms.run/phpmyadmin/phpmyadmin
+    depends_on:
+      - db
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      UPLOAD_LIMIT: 100M
+    ports:
+      - "${PHPMYADMIN_PORT:-9888}:80"
+    networks:
+      - mummories-net
+
+volumes:
+  mummories_db:
+    driver: local
+
+networks:
+  mummories-net:
+    driver: bridge
