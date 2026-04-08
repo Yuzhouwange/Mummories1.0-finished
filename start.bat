@@ -21,11 +21,40 @@ goto :CHECK_COMPOSE
 
 :NO_DOCKER
 echo.
-echo  [X] Docker not found
-echo      Install: https://docs.docker.com/desktop/install/windows-install/
+echo  [!] Docker not found, installing automatically...
+echo      Downloading Docker Desktop installer...
+
+:: Download Docker Desktop via PowerShell
+powershell -NoProfile -Command ^
+  "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+  "$url = 'https://desktop.docker.com/win/main/amd64/Docker%%20Desktop%%20Installer.exe';" ^
+  "$out = Join-Path $env:TEMP 'DockerDesktopInstaller.exe';" ^
+  "Write-Host '      Downloading...';" ^
+  "(New-Object Net.WebClient).DownloadFile($url, $out);" ^
+  "if (Test-Path $out) { Write-Host '      Download complete.' } else { Write-Host '      Download failed!'; exit 1 }"
+
+if errorlevel 1 (
+    echo  [X] Failed to download Docker Desktop
+    echo      Please install manually: https://docs.docker.com/desktop/install/windows-install/
+    pause
+    exit /b 1
+)
+
+echo      Running Docker Desktop installer (silent)...
+echo      This may take a few minutes and require a restart...
+"%TEMP%\DockerDesktopInstaller.exe" install --quiet --accept-license
+if errorlevel 1 (
+    echo  [X] Docker Desktop installation failed
+    echo      Please install manually: https://docs.docker.com/desktop/install/windows-install/
+    pause
+    exit /b 1
+)
+echo      Docker Desktop installed!
 echo.
+echo  [!] Please RESTART your computer, then run this script again.
+echo      (Docker Desktop needs a restart to complete setup)
 pause
-exit /b 1
+exit /b 0
 
 :CHECK_COMPOSE
 docker compose version >nul 2>&1
@@ -34,23 +63,55 @@ echo      Docker Compose - OK
 goto :CHECK_DAEMON
 
 :NO_COMPOSE
-echo  [X] Docker Compose not found, please update Docker Desktop
+echo  [!] Docker Compose not found
+echo      Updating Docker Desktop for Compose support...
+echo      Please update Docker Desktop manually and re-run this script.
+start https://docs.docker.com/desktop/install/windows-install/
 pause
 exit /b 1
 
 :CHECK_DAEMON
 docker info >nul 2>&1
-if errorlevel 1 goto :NO_DAEMON
+if errorlevel 1 goto :START_DAEMON
 echo      Docker daemon - running
 goto :CHECK_PORTS
 
-:NO_DAEMON
-echo.
-echo  [X] Docker daemon not running
-echo      Please start Docker Desktop and wait until it is ready
-echo.
+:START_DAEMON
+echo  [!] Docker daemon not running, starting automatically...
+
+:: Try to start Docker Desktop
+set DOCKER_EXE=
+if exist "%ProgramFiles%\Docker\Docker\Docker Desktop.exe" set "DOCKER_EXE=%ProgramFiles%\Docker\Docker\Docker Desktop.exe"
+if exist "%ProgramFiles(x86)%\Docker\Docker\Docker Desktop.exe" set "DOCKER_EXE=%ProgramFiles(x86)%\Docker\Docker\Docker Desktop.exe"
+if not defined DOCKER_EXE (
+    echo  [X] Cannot find Docker Desktop executable
+    echo      Please start Docker Desktop manually and re-run this script
+    pause
+    exit /b 1
+)
+
+start "" "%DOCKER_EXE%"
+echo      Waiting for Docker daemon to start...
+
+set DAEMON_WAIT=0
+:DAEMON_WAIT_LOOP
+if %DAEMON_WAIT% geq 120 goto :DAEMON_TIMEOUT
+docker info >nul 2>&1
+if not errorlevel 1 goto :DAEMON_READY
+set /a DAEMON_WAIT+=5
+echo      Waiting... (%DAEMON_WAIT%s / 120s)
+timeout /t 5 /nobreak >nul
+goto :DAEMON_WAIT_LOOP
+
+:DAEMON_TIMEOUT
+echo  [X] Docker daemon failed to start within 120 seconds
+echo      Please start Docker Desktop manually and re-run this script
 pause
 exit /b 1
+
+:DAEMON_READY
+echo      Docker daemon - started successfully!
+
 
 :: ========== 2. Ports ==========
 :CHECK_PORTS
@@ -175,16 +236,19 @@ echo.
 echo [5/6] Building and starting (first run takes 2-5 min)...
 echo.
 
+::Build and start (with phpMyAdmin in dev profile)
 if defined APP_ALREADY_RUNNING goto :ALREADY_RUNNING
 
-:: Try full deploy first; if PMA port is busy, retry without phpMyAdmin
-docker compose up -d --build 2>"%TEMP%\mummories_build.log"
+echo      Pulling images...
+docker compose pull --ignore-buildable 2>nul
+echo      Building...
+docker compose --profile dev up -d --build 2>"%TEMP%\mummories_build.log"
 if errorlevel 1 (
     findstr /i "port is already allocated" "%TEMP%\mummories_build.log" >nul 2>&1
     if not errorlevel 1 (
         echo.
         echo  [~] phpMyAdmin port conflict, starting without it...
-        docker compose up -d --build --no-deps db app nginx
+        docker compose up -d --build
         if errorlevel 1 goto :BUILD_FAIL
     ) else (
         type "%TEMP%\mummories_build.log"
@@ -248,7 +312,7 @@ echo.
 echo   Blog:        http://localhost:%HTTP_PORT%
 echo   Chat:        http://localhost:%HTTP_PORT%/chat
 echo   Admin:       http://localhost:%HTTP_PORT%/admin
-echo   phpMyAdmin:  http://localhost:%PMA_PORT%
+echo   phpMyAdmin:  http://localhost:%PMA_PORT% (dev mode)
 echo.
 echo  ----------------------------------------
 echo   Admin API Key: %FINAL_API_KEY%

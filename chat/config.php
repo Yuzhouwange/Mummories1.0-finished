@@ -193,7 +193,7 @@ define('DB_PASS', $db_pass ?: '');
 
 // 应用配置
 define('APP_NAME', 'Mummories');
-define('APP_URL', 'http://localhost/chat');
+define('APP_URL', getEnvVar('APP_URL') ?: 'http://localhost/chat');
 
 // 安全配置
 define('HASH_ALGO', PASSWORD_DEFAULT);
